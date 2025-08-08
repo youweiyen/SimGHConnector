@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RestSharp" Version="112.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SimScale.Sdk">
+      <HintPath>..\..\simscale-csharp-sdk\src\SimScale.Sdk\bin\Release\netstandard2.0\SimScale.Sdk.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
