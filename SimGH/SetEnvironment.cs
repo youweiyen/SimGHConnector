@@ -14,6 +14,7 @@ using SimScale.Sdk.Model;
 using System.IO;
 using System.Threading;
 using static System.Net.WebRequestMethods;
+using SimGH.Properties;
 
 
 namespace SimGH
@@ -148,7 +149,7 @@ namespace SimGH
         /// You can add image files to your project resources and access them like this:
         /// return Resources.IconForThisComponent;
         /// </summary>
-        protected override System.Drawing.Bitmap Icon => null;
+        protected override System.Drawing.Bitmap Icon => Resources.SimGHLogo;
 
         /// <summary>
         /// Each component must have a unique Guid to identify it. 
