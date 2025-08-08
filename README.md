@@ -1,5 +1,5 @@
-SimScale to Grasshopper Connection for automating geometry and simulations at CEMAS - Royal Danish Academy
+### SimScale to Grasshopper Connection at CEMAS - Royal Danish Academy
+For automating geometry and simulations. <br/>
+Plugin built on .net7.0 ,so only for Rhino8 and later. Currently in early stage building process. <br/>
 
-Plugin built on .net7.0 ,so onl for Rhino8 and later.
-
-More information at: https://github.com/SimScaleGmbH/simscale-csharp-sdk
+More information at: [https://github.com/SimScaleGmbH/simscale-csharp-sdk] <br/>
