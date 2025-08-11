@@ -43,6 +43,8 @@ namespace SimGH
             pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
             pManager.AddTextParameter("Description", "D", "Project Description", GH_ParamAccess.item);
             pManager.AddTextParameter("APIKey", "K", "API Key", GH_ParamAccess.item);
+            pManager.AddTextParameter("FilePath", "F", "Geometry File Path", GH_ParamAccess.item);
+            pManager[1].Optional = true;
         }
 
         /// <summary>
@@ -61,15 +63,21 @@ namespace SimGH
         protected override void SolveInstance(IGH_DataAccess DA)
         {
             string projectName = default;
-            string projectDescription = default;
+            string projectDescription = "description";
+            string apiKey = default;
+            string filePath = default;
+
             DA.GetData(0, ref projectName);
-            DA.GetData(0, ref projectDescription);
+            DA.GetData(1, ref projectDescription);
+            DA.GetData(2, ref apiKey);
+            DA.GetData(3, ref filePath);
+
             // API client configuration
             var API_KEY_HEADER = "X-API-KEY";
             //var API_KEY = Environment.GetEnvironmentVariable("SIMSCALE_API_KEY");
             //var API_URL = Environment.GetEnvironmentVariable("SIMSCALE_API_URL");
             var API_URL = "https://api.simscale.com";
-            var API_KEY = "ea4c2f66-e56d-489d-8a74-fc7b6658fe7c";
+            var API_KEY = apiKey;
 
             Configuration config = new Configuration();
             config.BasePath = API_URL + "/v0";
@@ -107,16 +115,16 @@ namespace SimGH
             var storage = storageApi.CreateStorage();
             var storageId = storage.StorageId;
             var uploadRequest = new RestRequest(storage.Url, Method.PUT);
-            uploadRequest.AddParameter("application/octet-stream", System.IO.File.ReadAllBytes(@"../fixtures/pipe_junction_model_tutorial.x_t"), ParameterType.RequestBody);
+            uploadRequest.AddParameter("application/octet-stream", System.IO.File.ReadAllBytes(@filePath), ParameterType.RequestBody);
             restClient.Execute(uploadRequest);
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "storageId: " + storageId);
 
             // Import CAD
             var geometryImportRequest = new GeometryImportRequest(
-                name: "Pipe junction",
+                name: "a",
                 location: new GeometryImportRequestLocation(storageId),
-                format: GeometryImportRequest.FormatEnum.PARASOLID,
-                inputUnit: GeometryUnit.M,
+                format: GeometryImportRequest.FormatEnum.RHINOCEROS,
+                inputUnit: GeometryUnit.Mm,
                 options: new GeometryImportRequestOptions(facetSplit: false, sewing: false, improve: true, optimizeForLBMSolver: false)
             );
             var geometryImport = geometryImportApi.ImportGeometry(projectId, geometryImportRequest);
