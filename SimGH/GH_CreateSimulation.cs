@@ -6,6 +6,9 @@ using Grasshopper.Kernel.Types.Transforms;
 using Rhino.Geometry;
 using SimScale.Sdk.Api;
 using SimScale.Sdk.Model;
+using SimScale.Sdk.Client;
+using System.Linq;
+using System.Configuration;
 using Point = SimScale.Sdk.Model.Point;
 
 namespace SimGH
@@ -29,8 +32,8 @@ namespace SimGH
         {
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
-            pManager.AddGenericParameter("GeometryAPI", "GA", "Geometry API", GH_ParamAccess.item);
-            pManager.AddGenericParameter("SimulationAPI", "SA", "Simulation API", GH_ParamAccess.item);
+            pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
+            pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
         }
 
         /// <summary>
@@ -38,6 +41,7 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
+
         }
 
         /// <summary>
@@ -48,16 +52,24 @@ namespace SimGH
         {
             string projectId = default;
             string geometryIdText = default;
-            var geometryApi = new GeometriesApi();
-            var simulationApi = new SimulationsApi();
-
+            SimScale.Sdk.Client.Configuration config = default;
+            string projectName = default;
 
             DA.GetData(0, ref projectId);
             DA.GetData(1, ref geometryIdText);
-            DA.GetData(2, ref geometryApi);
-            DA.GetData(3, ref simulationApi);
+            DA.GetData(2, ref config);
+            DA.GetData(3, ref projectName);
 
             Guid geometryId = new Guid(geometryIdText);
+
+            var geometryApi = new GeometriesApi(config);
+            var meshOperationApi = new MeshOperationsApi(config);
+            var simulationApi = new SimulationsApi(config);
+            var materialsApi = new MaterialsApi(config);
+
+            //var simulationRunApi = new SimulationRunsApi(config);
+            //var tableImportApi = new TableImportsApi(config);
+            //var reportsApi = new ReportsApi(config);
 
             // Read geometry information and update with the deserialized model
             var geometry = geometryApi.GetGeometry(projectId, geometryId);
@@ -83,170 +95,103 @@ namespace SimGH
                 geometryId,
                 values: new List<string> { "block3" }
             );
-            var bc3Entity = getSingleEntityName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "block4" }
-            );
-            var bc4Entity = getSingleEntityName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "Wall 1" }
-            );
-
-            // Create geeometry primitive to use as probe point in simulation
-            var geometryPrimitivePoint = new Point(
-                name: "Point 1",
-                center: new DimensionalVectorLength(
-                    value: new DecimalVector(
-                        x: 0,
-                        y: 0,
-                        z: -0
-                    ),
-                    unit: DimensionalVectorLength.UnitEnum.M
-                )
-            );
-            var geometryPrimitiveId = simulationApi.CreateGeometryPrimitive(
-                projectId,
-                geometryPrimitivePoint
-            ).GeometryPrimitiveId;
-            Console.WriteLine("geometryPrimitiveUuid: " + geometryPrimitiveId);
 
 
-            // Create simulation model
-            var simulationModel = new ConvectiveHeatTransfer(
-                isCompressible: false,
-                turbulenceModel: ConvectiveHeatTransfer.TurbulenceModelEnum.KOMEGASST,
-                model: new FluidModel(),
-                initialConditions: new FluidInitialConditions(),
-                advancedConcepts: new AdvancedConcepts(),
-                materials: new ConvectiveHeatTransferMaterials(),
-                numerics: new FluidNumerics(
-                    relaxationFactor: new RelaxationFactor(),
-                    pressureReferenceValue: new DimensionalPressure(
-                        value: 0,
-                        unit: DimensionalPressure.UnitEnum.Pa
-                    ),
-                    residualControls: new ResidualControls(
-                        velocity: new Tolerance(),
-                        pressureRgh: new Tolerance(),
-                        turbulentKineticEnergy: new Tolerance(),
-                        omegaDissipationRate: new Tolerance(),
-                        temperature: new Tolerance()
-                    ),
-                    solvers: new FluidSolvers(),
-                    schemes: new Schemes(
-                        timeDifferentiation: new TimeDifferentiationSchemes(),
-                        gradient: new GradientSchemes(),
-                        divergence: new DivergenceSchemes(),
-                        laplacian: new LaplacianSchemes(),
-                        interpolation: new InterpolationSchemes(),
-                        surfaceNormalGradient: new SurfaceNormalGradientSchemes()
-                    )
-                ),
-                boundaryConditions: new List<OneOfConvectiveHeatTransferBoundaryConditions>() {
-                new VelocityInletBC(
-                    name: "Velocity inlet 1",
-                    velocity: new FixedValueVBC(
-                        value: new DimensionalVectorFunctionSpeed(
-                            value: new ComponentVectorFunction(
-                                x: new ConstantFunction(value: 0),
-                                y: new ConstantFunction(value: (decimal) -0.001),
-                                z: new ConstantFunction(value: 0)
-                            )
-                        )
-                    ),
-                    temperature: new FixedValueTBC(
-                        value: new DimensionalFunctionTemperature(
-                            value: new ConstantFunction(value: (decimal) 19.85),
-                            unit: DimensionalFunctionTemperature.UnitEnum.C
-                        )
-                    ),
-                    topologicalReference: new TopologicalReference(
-                        entities: new List<string>() { bc1Entity }
-                    )
-                ),
-                new PressureOutletBC(
-                    name: "Pressure outlet 2",
-                    gaugePressureRgh: new FixedValuePBC(
-                        value: new DimensionalFunctionPressure(
-                            value: new ConstantFunction(value: 0),
-                            unit: DimensionalFunctionPressure.UnitEnum.Pa
-                        )
-                    ),
-                    topologicalReference: new TopologicalReference(
-                        entities: new List<string>() { bc2Entity }
-                    )
-                ),
-                new PressureOutletBC(
-                    name: "Pressure outlet 3",
-                    gaugePressureRgh: new FixedValuePBC(
-                        value: new DimensionalFunctionPressure(
-                            value: new ConstantFunction(value: 0),
-                            unit: DimensionalFunctionPressure.UnitEnum.Pa
-                        )
-                    ),
-                    topologicalReference: new TopologicalReference(
-                        entities: new List<string>() { bc3Entity }
-                    )
-                ),
-                new WallBC(
-                    name: "Wall 4",
-                    velocity: new NoSlipVBC(
-                        turbulenceWall: NoSlipVBC.TurbulenceWallEnum.WALLFUNCTION
-                    ),
-                    temperature: new FixedValueTBC(
-                        value: new DimensionalFunctionTemperature(
-                            value: new ConstantFunction(value: 285),
-                            unit: DimensionalFunctionTemperature.UnitEnum.C
-                        )
-                    ),
-                    topologicalReference: new TopologicalReference(
-                        entities: new List<string>() { bc4Entity }
-                    )
-                )
-                },
-                simulationControl: new FluidSimulationControl(
-                    endTime: new DimensionalTime(
-                        value: 100,
-                        unit: DimensionalTime.UnitEnum.S
-                    ),
-                    deltaT: new DimensionalTime(
-                        value: 1,
-                        unit: DimensionalTime.UnitEnum.S
-                    ),
-                    maxRunTime: new DimensionalTime(
-                        value: 10000,
-                        unit: DimensionalTime.UnitEnum.S
-                    ),
-                    writeControl: new TimeStepWriteControl(
-                        writeInterval: 100
-                    ),
-                    decomposeAlgorithm: new ScotchDecomposeAlgorithm()
-                ),
-                resultControl: new FluidResultControls(
-                    forcesMoments: new List<OneOfFluidResultControlsForcesMoments>(),
-                    surfaceData: new List<OneOfFluidResultControlsSurfaceData>() {
-                    new AreaAverageResultControl(
-                        name: "Area average 1",
-                        writeControl: new TimeStepWriteControl(writeInterval: 1),
+            // Initialize simulation model
+            var simulationModel = new HeatTransfer (
+                timeDependency: default,
+                nonLinearAnalysis: false,
+                connectionGroups: new List<Contact>(),
+                elementTechnology: new SolidElementTechnology(),
+                model: new SolidModel(),
+                materials: new List<SolidMaterial>(),
+                initialConditions: new SolidInitialConditions(),
+                boundaryConditions: 
+                new List<OneOfHeatTransferBoundaryConditions>()
+                {
+                    //new SurfaceHeatFluxBC(
+                    //    name: "HeatPlate",
+                    //    heatfluxValue: new DimensionalFunctionHeatFlux(),
+                    //    topologicalReference: new TopologicalReference(
+                    //        entities: new List<string>() { bc1Entity }
+                    //    )
+                    //),
+                    //new ConvectiveHeatFluxBC(
+                    //    name: "TopSurface"),
+                    new FixedTemperatureValueBC(
+                        name: "HeatTemperature",
+                        temperatureValue: new DimensionalFunctionTemperature(),
                         topologicalReference: new TopologicalReference(
-                            entities: new List<string>() { bc4Entity }
-                        )
-                    )
-                    },
-                    probePoints: new List<ProbePointsResultControl>() {
-                    new ProbePointsResultControl(
-                        name: "Probe point 1",
-                        writeControl: new TimeStepWriteControl(writeInterval: 1),
-                        geometryPrimitiveUuids: new List<Guid?>() { geometryPrimitiveId }
-                    )
-                    }
-                )
+                            entities: new List<string>() { bc1Entity})
+                        ),
+                    new FixedTemperatureValueBC(
+                        name: "SurfaceTemperature",
+                        temperatureValue: new DimensionalFunctionTemperature(),
+                        topologicalReference: new TopologicalReference(
+                            entities: new List<string>() { bc2Entity})
+                        ),
+                },
+                numerics: new SolidNumerics(),
+                simulationControl: new SolidSimulationControl(),
+                resultControl: new SolidResultControl(),
+                meshOrder: default
             );
+            var simulationSpec = new SimulationSpec(name: projectName, geometryId: geometryId, model: simulationModel);
+
+            // Create simulation first to use for physics based meshing
+            var simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
+            Console.WriteLine("simulationId: " + simulationId);
+
+            // Add a material to the simulation
+            var materialGroups = materialsApi.GetMaterialGroups().Embedded;
+            var defaultMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.SIMSCALEDEFAULT);
+            if (defaultMaterialGroup == null)
+            {
+                throw new Exception("Couldn't find default material group in " + materialGroups);
+            }
+
+            var defaultMaterials = materialsApi.GetMaterials(defaultMaterialGroup.MaterialGroupId).Embedded;
+            var materialAir = defaultMaterials.FirstOrDefault(material => material.Name == "Air");
+            if (materialAir == null)
+            {
+                throw new Exception("Couldn't find default Air material in " + defaultMaterials);
+            }
+
+            var materialData = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, materialAir.Id);
+            var materialUpdateRequest = new MaterialUpdateRequest(
+                operations: new List<MaterialUpdateOperation> {
+                new MaterialUpdateOperation(
+                    path: "/materials/fluids",
+                    materialData: materialData,
+                    reference: new MaterialUpdateOperationReference(
+                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
+                        materialId: materialAir.Id
+                    )
+                )
+                }
+            );
+            var materialUpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, materialUpdateRequest);
+
+            // Add assignments to the new material
+            simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
+            var materials = ((ConvectiveHeatTransfer)simulationSpec.Model).Materials.Fluids;
+            ((IncompressibleMaterial)materials.First()).TopologicalReference = new TopologicalReference(entities: new List<string>() { materialEntity });
+            simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+
+            // Create mesh operation
+            var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
+                name: "Pipe junction",
+                geometryId: geometryId,
+                model: new SimmetrixMeshingFluid(
+                    physicsBasedMeshing: true,
+                    automaticLayerSettings: new AutomaticLayerOn()
+                )
+            ));
+            var meshOperationId = meshOperation.MeshOperationId;
+            Console.WriteLine("meshOperationId: " + meshOperationId);
         }
+
+
         public static string getSingleEntityName(GeometriesApi geometryApi, string projectId, Guid geometryId,
                                        List<string> values = null)
         {

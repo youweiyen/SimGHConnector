@@ -20,7 +20,7 @@ using Grasshopper.Kernel.Types.Transforms;
 
 namespace SimGH
 {
-    public class SetEnvironment : GH_Component
+    public class GH_SetEnvironment : GH_Component
     {
         /// <summary>
         /// Each implementation of GH_Component must provide a public 
@@ -29,7 +29,7 @@ namespace SimGH
         /// Subcategory the panel. If you use non-existing tab or panel names, 
         /// new tabs/panels will automatically be created.
         /// </summary>
-        public SetEnvironment()
+        public GH_SetEnvironment()
           : base("SetEnv", "SE",
             "Set up connection environment for SimScale",
             "SimGH", "Set")
@@ -56,14 +56,13 @@ namespace SimGH
         {
             pManager.AddTextParameter("ProjectID", "P", "Project ID to access project", GH_ParamAccess.item);
             pManager.AddGenericParameter("GeometryID", "G", "Geometry ID to access geometry", GH_ParamAccess.item);
-            pManager.AddGenericParameter("GeometryAPI", "GA", "Geometry API", GH_ParamAccess.item);
-            pManager.AddGenericParameter("SimulationAPI", "SA", "Simulation API", GH_ParamAccess.item);
+            pManager.AddGenericParameter("Configuration", "C", "API client Configuration", GH_ParamAccess.item);
         }
 
         string projectId = default;
         Guid geometryId = default;
-        GeometriesApi geometryApi = new GeometriesApi();
-        SimulationsApi simulationApi = new SimulationsApi();
+        Configuration config = new Configuration();
+
         /// <summary>
         /// This is the method that actually does the work.
         /// </summary>
@@ -92,8 +91,6 @@ namespace SimGH
                 //var API_URL = Environment.GetEnvironmentVariable("SIMSCALE_API_URL");
                 var API_URL = "https://api.simscale.com";
                 var API_KEY = apiKey;
-
-                Configuration config = new Configuration();
                 config.BasePath = API_URL + "/v0";
                 config.ApiKey.Add(API_KEY_HEADER, API_KEY);
 
@@ -102,13 +99,14 @@ namespace SimGH
                 var projectApi = new ProjectsApi(config);
                 var storageApi = new StorageApi(config);
                 var geometryImportApi = new GeometryImportsApi(config);
-                geometryApi = new GeometriesApi(config);
-                var meshOperationApi = new MeshOperationsApi(config);
-                simulationApi = new SimulationsApi(config);
-                var simulationRunApi = new SimulationRunsApi(config);
-                var tableImportApi = new TableImportsApi(config);
-                var reportsApi = new ReportsApi(config);
-                var materialsApi = new MaterialsApi(config);
+
+                //var geometryApi = new GeometriesApi(config);
+                //var meshOperationApi = new MeshOperationsApi(config);
+                //var simulationApi = new SimulationsApi(config);
+                //var simulationRunApi = new SimulationRunsApi(config);
+                //var tableImportApi = new TableImportsApi(config);
+                //var reportsApi = new ReportsApi(config);
+                //var materialsApi = new MaterialsApi(config);
 
                 HashSet<SimScale.Sdk.Model.Status> terminalStatuses = new HashSet<SimScale.Sdk.Model.Status> { SimScale.Sdk.Model.Status.FINISHED, SimScale.Sdk.Model.Status.CANCELED, SimScale.Sdk.Model.Status.FAILED };
                 Stopwatch stopWatch = new Stopwatch();
@@ -135,7 +133,7 @@ namespace SimGH
 
                 // Import CAD
                 var geometryImportRequest = new GeometryImportRequest(
-                    name: "a",
+                    name: "Wood",
                     location: new GeometryImportRequestLocation(storageId),
                     format: GeometryImportRequest.FormatEnum.RHINOCEROS,
                     inputUnit: GeometryUnit.M,
@@ -163,8 +161,7 @@ namespace SimGH
 
             DA.SetData(0, projectId);
             DA.SetData(1, geometryId);
-            DA.SetData(2, geometryApi);
-            DA.SetData(3, simulationApi);
+            DA.SetData(2, config);
 
         }
 
