@@ -42,8 +42,9 @@ namespace SimGH
         {
             pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
             pManager.AddTextParameter("Description", "D", "Project Description", GH_ParamAccess.item);
-            pManager.AddTextParameter("APIKey", "K", "API Key", GH_ParamAccess.item);
+            pManager.AddTextParameter("APIKey", "K", "Your API Key", GH_ParamAccess.item);
             pManager.AddTextParameter("FilePath", "F", "Geometry File Path", GH_ParamAccess.item);
+            pManager.AddIntegerParameter("MaterialCount", "M", "Number of materials to assign", GH_ParamAccess.item);
             pManager[1].Optional = true;
         }
 
@@ -66,11 +67,13 @@ namespace SimGH
             string projectDescription = "description";
             string apiKey = default;
             string filePath = default;
+            int materialCount = 1;
 
             DA.GetData(0, ref projectName);
             DA.GetData(1, ref projectDescription);
             DA.GetData(2, ref apiKey);
             DA.GetData(3, ref filePath);
+            DA.GetData(4, ref materialCount);
 
             // API client configuration
             var API_KEY_HEADER = "X-API-KEY";
@@ -124,7 +127,7 @@ namespace SimGH
                 name: "a",
                 location: new GeometryImportRequestLocation(storageId),
                 format: GeometryImportRequest.FormatEnum.RHINOCEROS,
-                inputUnit: GeometryUnit.Mm,
+                inputUnit: GeometryUnit.M,
                 options: new GeometryImportRequestOptions(facetSplit: false, sewing: false, improve: true, optimizeForLBMSolver: false)
             );
             var geometryImport = geometryImportApi.ImportGeometry(projectId, geometryImportRequest);
@@ -141,7 +144,7 @@ namespace SimGH
                 Thread.Sleep(10000);
                 geometryImport = geometryImportApi.GetGeometryImport(projectId, geometryImportId) ??
                     (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : geometryImport);
-                Console.WriteLine("Geometry import status: " + geometryImport?.Status);
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Geometry import status: " + geometryImport?.Status);
             }
             var geometryId = geometryImport.GeometryId.Value;
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "geometryId: " + geometryId);
@@ -149,6 +152,34 @@ namespace SimGH
             // Read geometry information and update with the deserialized model
             var geometry = geometryApi.GetGeometry(projectId, geometryId);
             geometryApi.UpdateGeometry(projectId, geometryId, geometry);
+
+            //Get geometry mappings
+            for (int m = 0; m < materialCount; m++)
+            {
+                var materialEntity = getSingleEntityName(
+                   geometryApi,
+                   projectId,
+                   geometryId,
+                   values: new List<string> { "block1" } );
+            }
+        }
+        public static string getSingleEntityName(GeometriesApi geometryApi, string projectId, Guid geometryId,
+                                               List<string> values = null)
+        {
+            var entities = geometryApi.GetGeometryMappings(
+                projectId: projectId,
+                geometryId: geometryId,
+                attributes: new List<string> { "SDL/TYSA_NAME" },
+                values: values
+            ).Embedded;
+            if (entities.Count == 1)
+            {
+                return entities[0].Name;
+            }
+            else
+            {
+                throw new Exception("Unexpected number of entities returned");
+            }
         }
 
         /// <summary>
