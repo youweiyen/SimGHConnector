@@ -30,10 +30,10 @@ namespace SimGH
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
+            pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
-            pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
         }
 
         /// <summary>
@@ -50,15 +50,15 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            string projectName = default;
             string projectId = default;
             string geometryIdText = default;
             SimScale.Sdk.Client.Configuration config = default;
-            string projectName = default;
 
-            DA.GetData(0, ref projectId);
-            DA.GetData(1, ref geometryIdText);
-            DA.GetData(2, ref config);
-            DA.GetData(3, ref projectName);
+            DA.GetData(0, ref projectName);
+            DA.GetData(1, ref projectId);
+            DA.GetData(2, ref geometryIdText);
+            DA.GetData(3, ref config);
 
             Guid geometryId = new Guid(geometryIdText);
 
@@ -102,7 +102,7 @@ namespace SimGH
                 timeDependency: default,
                 nonLinearAnalysis: false,
                 connectionGroups: new List<Contact>(),
-                elementTechnology: new SolidElementTechnology(),
+                elementTechnology: new SolidElementTechnology(new ElementTechnology(new AutomaticElementDefinitionMethod())),
                 model: new SolidModel(),
                 materials: new List<SolidMaterial>(),
                 initialConditions: new SolidInitialConditions(),
@@ -131,8 +131,13 @@ namespace SimGH
                             entities: new List<string>() { bc2Entity})
                         ),
                 },
-                numerics: new SolidNumerics(),
-                simulationControl: new SolidSimulationControl(),
+                numerics: new SolidNumerics(
+                    solver: new MUMPSSolver("MUMPS", new AdvancedMUMPSSettings())
+                    ),
+                
+                simulationControl: new SolidSimulationControl(
+                    processors: new ComputingCore(),
+                    maxRunTime: new DimensionalTime(3600, DimensionalTime.UnitEnum.S)),
                 resultControl: new SolidResultControl(),
                 meshOrder: default
             );
@@ -180,12 +185,9 @@ namespace SimGH
 
             // Create mesh operation
             var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
-                name: "Pipe junction",
+                name: "WoodMesh",
                 geometryId: geometryId,
-                model: new SimmetrixMeshingFluid(
-                    physicsBasedMeshing: true,
-                    automaticLayerSettings: new AutomaticLayerOn()
-                )
+                model: new SimmetrixMeshingSolid()
             ));
             var meshOperationId = meshOperation.MeshOperationId;
             Console.WriteLine("meshOperationId: " + meshOperationId);
