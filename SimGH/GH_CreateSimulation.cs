@@ -83,9 +83,6 @@ namespace SimGH
             var geometry = geometryApi.GetGeometry(projectId, geometryId);
             geometryApi.UpdateGeometry(projectId, geometryId, geometry);
 
-
-
-
             // Get geometry mappings
 
             //var bc1Entity = geometryApi.GetGeometryMappings(

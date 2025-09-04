@@ -85,6 +85,10 @@ namespace SimGH
 
             if (upload)
             {
+                projectId = default;
+                geometryId = default;
+                config = new Configuration();
+
                 // API client configuration
                 var API_KEY_HEADER = "X-API-KEY";
                 //var API_KEY = Environment.GetEnvironmentVariable("SIMSCALE_API_KEY");
