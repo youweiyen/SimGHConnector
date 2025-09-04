@@ -32,6 +32,7 @@ namespace SimGH
         {
             pManager.AddBrepParameter("Extrusion", "E", "Geometry Extrusion", GH_ParamAccess.tree);
             pManager.AddTextParameter("Name", "N", "Material Name", GH_ParamAccess.list);
+            pManager.AddBooleanParameter("Run", "T", "Set True to run", GH_ParamAccess.item);
         }
 
         /// <summary>
@@ -39,7 +40,6 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-
         }
 
         /// <summary>
@@ -50,61 +50,67 @@ namespace SimGH
         {
             GH_Structure<GH_Brep> stockGoo = new GH_Structure<GH_Brep>();
             List<string> inName = new List<string>();
+            bool run = false;
 
             DA.GetDataTree(0, out stockGoo);
             DA.GetDataList(1, inName);
+            DA.GetData(2, ref run);
 
             string layerName = "Export As STEP";
 
-            Rhino.RhinoDoc doc = Rhino.RhinoDoc.ActiveDoc;
-            var layer = doc.Layers.FindName(layerName, RhinoMath.UnsetIntIndex);
-            if (layer == null)
-            {
-                doc.Layers.Add(layerName, System.Drawing.Color.Black);
-            }
-            int layerIndex = doc.Layers.FindName(layerName, RhinoMath.UnsetIntIndex).Index;
+            if (run)
+            { 
 
-
-            DataTree<Brep> tree = new DataTree<Brep>();
-            
-            for (int p = 0; p < stockGoo.PathCount; p++)
-            {
-                List<GH_Brep> listGoo = stockGoo.Branches[p];
-                List<Brep> stock = listGoo.Select(goo => goo.Value).ToList();
-
-                for (int w = 0; w < stock.Count; w++)
+                Rhino.RhinoDoc doc = Rhino.RhinoDoc.ActiveDoc;
+                var layer = doc.Layers.FindName(layerName, RhinoMath.UnsetIntIndex);
+                if (layer == null)
                 {
-                    double lowHeight = double.MaxValue;
-                    double highHeight = double.MinValue;
+                    doc.Layers.Add(layerName, System.Drawing.Color.Black);
+                }
+                int layerIndex = doc.Layers.FindName(layerName, RhinoMath.UnsetIntIndex).Index;
 
-                    BrepFace lowestSurface = default;
-                    BrepFace highestSurface = default;
 
-                    for (int i = 0; i < stock[w].Faces.Count; i++)
+                DataTree<Brep> tree = new DataTree<Brep>();
+            
+                for (int p = 0; p < stockGoo.PathCount; p++)
+                {
+                    List<GH_Brep> listGoo = stockGoo.Branches[p];
+                    List<Brep> stock = listGoo.Select(goo => goo.Value).ToList();
+
+                    for (int w = 0; w < stock.Count; w++)
                     {
-                        BrepFace surface = stock[w].Faces[i];
-                        double midU = surface.Domain(0).Mid;
-                        double midV = surface.Domain(1).Mid;
+                        double lowHeight = double.MaxValue;
+                        double highHeight = double.MinValue;
 
-                        Point3d midPoint = surface.PointAt(midU, midV);
-                        if (midPoint.Z < lowHeight)
+                        BrepFace lowestSurface = default;
+                        BrepFace highestSurface = default;
+
+                        for (int i = 0; i < stock[w].Faces.Count; i++)
                         {
-                            lowHeight = midPoint.Z;
-                            lowestSurface = surface;
+                            BrepFace surface = stock[w].Faces[i];
+                            double midU = surface.Domain(0).Mid;
+                            double midV = surface.Domain(1).Mid;
+
+                            Point3d midPoint = surface.PointAt(midU, midV);
+                            if (midPoint.Z < lowHeight)
+                            {
+                                lowHeight = midPoint.Z;
+                                lowestSurface = surface;
+                            }
+                            if (midPoint.Z > highHeight)
+                            {
+                                highHeight = midPoint.Z;
+                                highestSurface = surface;
+                            }
                         }
-                        if (midPoint.Z > highHeight)
-                        {
-                            highHeight = midPoint.Z;
-                            highestSurface = surface;
-                        }
-                    }
-                    lowestSurface.PerFaceColor = System.Drawing.Color.Red;
-                    highestSurface.PerFaceColor = System.Drawing.Color.Blue;
+                        lowestSurface.PerFaceColor = System.Drawing.Color.Red;
+                        highestSurface.PerFaceColor = System.Drawing.Color.Blue;
                     
-                    ObjectAttributes objAtt = new ObjectAttributes();
-                    objAtt.Name = inName[p];
-                    objAtt.LayerIndex = layerIndex;
-                    doc.Objects.AddBrep(stock[w], objAtt);
+                        ObjectAttributes objAtt = new ObjectAttributes();
+                        objAtt.Name = inName[p];
+                        objAtt.LayerIndex = layerIndex;
+                        doc.Objects.AddBrep(stock[w], objAtt);
+                    }
                 }
             }
 
