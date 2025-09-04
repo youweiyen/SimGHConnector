@@ -135,7 +135,7 @@ namespace SimGH
                 var geometryImportRequest = new GeometryImportRequest(
                     name: "Wood",
                     location: new GeometryImportRequestLocation(storageId),
-                    format: GeometryImportRequest.FormatEnum.RHINOCEROS,
+                    format: GeometryImportRequest.FormatEnum.STEP,
                     inputUnit: GeometryUnit.M,
                     options: new GeometryImportRequestOptions(facetSplit: false, sewing: false, improve: true, optimizeForLBMSolver: false)
                 );

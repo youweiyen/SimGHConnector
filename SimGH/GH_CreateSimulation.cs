@@ -10,6 +10,9 @@ using SimScale.Sdk.Client;
 using System.Linq;
 using System.Configuration;
 using Point = SimScale.Sdk.Model.Point;
+using System.Diagnostics;
+using System.Threading;
+using System.Drawing;
 
 namespace SimGH
 {
@@ -34,6 +37,8 @@ namespace SimGH
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
+            pManager.AddColourParameter("")
+
         }
 
         /// <summary>
@@ -76,24 +81,37 @@ namespace SimGH
             geometryApi.UpdateGeometry(projectId, geometryId, geometry);
 
 
+
+
             // Get geometry mappings
-            var materialEntity = getSingleEntityName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "block1" }
-            );
-            var bc1Entity = getSingleEntityName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "block2" }
-            );
+
+            var bc1Entity = geometryApi.GetGeometryMappings(
+                projectId: projectId,
+                geometryId: geometryId,
+                _class: "face"
+            ).Embedded;
+            var bc2entity = geometryApi.GetGeometryMappings(
+                projectId: projectId,
+                geometryId: geometryId,
+                _class: "region"
+            ).Embedded;
             var bc2Entity = getSingleEntityName(
                 geometryApi,
                 projectId,
                 geometryId,
-                values: new List<string> { "block3" }
+                values: new List<string> { "b10" }
+            );
+            var entities = geometryApi.GetGeometryMappings(
+                projectId: projectId,
+                geometryId: geometryId,
+                attributes: new List<string> { "SDL/TYSA_COLOUR" },
+                values: new List<string> {"[0 0 1]" }
+            ).Embedded;
+            var materialEntity = getSingleEntityColor(
+                geometryApi,
+                projectId,
+                geometryId,
+                values: new List<string> { "[0 0 1]" }
             );
 
 
@@ -122,7 +140,7 @@ namespace SimGH
                         name: "HeatTemperature",
                         temperatureValue: new DimensionalFunctionTemperature(),
                         topologicalReference: new TopologicalReference(
-                            entities: new List<string>() { bc1Entity})
+                            entities: new List<string>() { bc1Entity[0].Name })
                         ),
                     new FixedTemperatureValueBC(
                         name: "SurfaceTemperature",
@@ -156,13 +174,13 @@ namespace SimGH
             }
 
             var defaultMaterials = materialsApi.GetMaterials(defaultMaterialGroup.MaterialGroupId).Embedded;
-            var materialAir = defaultMaterials.FirstOrDefault(material => material.Name == "Air");
-            if (materialAir == null)
+            var Wood1 = defaultMaterials.FirstOrDefault(material => material.Name == "Wood");
+            if (Wood1 == null)
             {
                 throw new Exception("Couldn't find default Air material in " + defaultMaterials);
             }
 
-            var materialData = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, materialAir.Id);
+            var materialData = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, Wood1.Id);
             var materialUpdateRequest = new MaterialUpdateRequest(
                 operations: new List<MaterialUpdateOperation> {
                 new MaterialUpdateOperation(
@@ -170,7 +188,7 @@ namespace SimGH
                     materialData: materialData,
                     reference: new MaterialUpdateOperationReference(
                         materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                        materialId: materialAir.Id
+                        materialId: Wood1.Id
                     )
                 )
                 }
@@ -191,6 +209,74 @@ namespace SimGH
             ));
             var meshOperationId = meshOperation.MeshOperationId;
             Console.WriteLine("meshOperationId: " + meshOperationId);
+
+            // Check mesh operation setup
+            var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
+            var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+            Console.WriteLine("Mesh operation setup check warnings:");
+            warnings.ForEach(i => Console.WriteLine("{0}", i));
+            var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+            if (errors.Any())
+            {
+                Console.WriteLine("Mesh operation setup check errors:");
+                errors.ForEach(i => Console.WriteLine("{0}", i));
+                throw new Exception("Simulation check failed");
+            }
+
+            // Estimate mesh operation
+            var maxRuntime = 0.0;
+            try
+            {
+                var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
+                Console.WriteLine("Mesh operation estimation: " + estimationResult);
+
+                if (estimationResult.Duration != null)
+                {
+                    maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
+                    maxRuntime = Math.Max(3600, maxRuntime * 2);
+                }
+                else
+                {
+                    maxRuntime = 36000;
+                    Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
+                }
+            }
+            catch (ApiException ae)
+            {
+                if (ae.ErrorCode == 422)
+                {
+                    maxRuntime = 36000;
+                    Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
+                }
+                else
+                {
+                    throw ae;
+                }
+            }
+
+            // Start mesh operation and wait until it's finished
+            meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
+            meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
+
+            Stopwatch stopWatch = Stopwatch.StartNew();
+            HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
+
+
+            stopWatch.Restart();
+            int failedTries = 0;
+            while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
+            {
+                if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
+                {
+                    throw new TimeoutException();
+                }
+                Thread.Sleep(30000);
+                meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
+                    (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
+                Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+            }
+
+            Console.WriteLine("final mesh operation: " + meshOperation);
         }
 
 
@@ -200,10 +286,28 @@ namespace SimGH
             var entities = geometryApi.GetGeometryMappings(
                 projectId: projectId,
                 geometryId: geometryId,
-                attributes: new List<string> { "SDL/TYSA_NAME" },
+                attributes: new List<string> { "ATTRIB_XPARASOLID_NAME" },
                 values: values
             ).Embedded;
             if (entities.Count == 1)
+            {
+                return entities[0].Name;
+            }
+            else
+            {
+                throw new Exception("Unexpected number of entities returned");
+            }
+        }
+        public static string getSingleEntityColor(GeometriesApi geometryApi, string projectId, Guid geometryId,
+                               List<string> values = null)
+        {
+            var entities = geometryApi.GetGeometryMappings(
+                projectId: projectId,
+                geometryId: geometryId,
+                attributes: new List<string> { "SDL/TYSA_COLOUR" },
+                values: values
+            ).Embedded;
+            if (entities.Count == 15)
             {
                 return entities[0].Name;
             }
