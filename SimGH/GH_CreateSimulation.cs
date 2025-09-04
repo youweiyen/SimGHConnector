@@ -37,7 +37,6 @@ namespace SimGH
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
-            pManager.AddColourParameter("")
 
         }
 
