@@ -32,7 +32,7 @@ namespace SimGH
         public GH_SetEnvironment()
           : base("SetEnv", "SE",
             "Set up connection environment for SimScale",
-            "SimGH", "Set")
+            "SimGH", "1_SimScale")
         {
         }
 

@@ -24,7 +24,7 @@ namespace SimGH
         public GH_CreateSimulation()
           : base("CreateSim", "CS",
               "Create Simulation Model",
-              "SimGH", "Set")
+              "SimGH", "1_SimScale")
         {
         }
 
@@ -37,6 +37,8 @@ namespace SimGH
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
+            pManager.AddTextParameter("Name", "N", "Material Name", GH_ParamAccess.list);
+
 
         }
 
@@ -58,11 +60,13 @@ namespace SimGH
             string projectId = default;
             string geometryIdText = default;
             SimScale.Sdk.Client.Configuration config = default;
+            List<string> materialName = new List<string>(); 
 
             DA.GetData(0, ref projectName);
             DA.GetData(1, ref projectId);
             DA.GetData(2, ref geometryIdText);
             DA.GetData(3, ref config);
+            DA.GetDataList(4, materialName);
 
             Guid geometryId = new Guid(geometryIdText);
 
@@ -84,29 +88,42 @@ namespace SimGH
 
             // Get geometry mappings
 
-            var bc1Entity = geometryApi.GetGeometryMappings(
-                projectId: projectId,
-                geometryId: geometryId,
-                _class: "face"
-            ).Embedded;
-            var bc2entity = geometryApi.GetGeometryMappings(
-                projectId: projectId,
-                geometryId: geometryId,
-                _class: "region"
-            ).Embedded;
-            var bc2Entity = getSingleEntityName(
+            //var bc1Entity = geometryApi.GetGeometryMappings(
+            //    projectId: projectId,
+            //    geometryId: geometryId,
+            //    _class: "face"
+            //).Embedded;
+            //var bc2entity = geometryApi.GetGeometryMappings(
+            //    projectId: projectId,
+            //    geometryId: geometryId,
+            //    _class: "region"
+            //).Embedded;
+
+            var density0 = GetEntityByName(
                 geometryApi,
                 projectId,
                 geometryId,
-                values: new List<string> { "b10" }
+                values: new List<string> { materialName[0] }
             );
-            var entities = geometryApi.GetGeometryMappings(
-                projectId: projectId,
-                geometryId: geometryId,
-                attributes: new List<string> { "SDL/TYSA_COLOUR" },
-                values: new List<string> {"[0 0 1]" }
-            ).Embedded;
-            var materialEntity = getSingleEntityColor(
+            var density1 = GetEntityByName(
+                geometryApi,
+                projectId,
+                geometryId,
+                values: new List<string> { materialName[1] }
+            );
+            var density2 = GetEntityByName(
+                geometryApi,
+                projectId,
+                geometryId,
+                values: new List<string> { materialName[2] }
+            );
+            var heatEntity = GetEntityByColor(
+                geometryApi,
+                projectId,
+                geometryId,
+                values: new List<string> { "[1 0 0]" }
+            );
+            var convectionEntity = GetEntityByColor(
                 geometryApi,
                 projectId,
                 geometryId,
@@ -139,13 +156,13 @@ namespace SimGH
                         name: "HeatTemperature",
                         temperatureValue: new DimensionalFunctionTemperature(),
                         topologicalReference: new TopologicalReference(
-                            entities: new List<string>() { bc1Entity[0].Name })
+                            entities:  heatEntity )
                         ),
                     new FixedTemperatureValueBC(
                         name: "SurfaceTemperature",
                         temperatureValue: new DimensionalFunctionTemperature(),
                         topologicalReference: new TopologicalReference(
-                            entities: new List<string>() { bc2Entity})
+                            entities: convectionEntity )
                         ),
                 },
                 numerics: new SolidNumerics(
@@ -197,7 +214,7 @@ namespace SimGH
             // Add assignments to the new material
             simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
             var materials = ((ConvectiveHeatTransfer)simulationSpec.Model).Materials.Fluids;
-            ((IncompressibleMaterial)materials.First()).TopologicalReference = new TopologicalReference(entities: new List<string>() { materialEntity });
+            ((IncompressibleMaterial)materials.First()).TopologicalReference = new TopologicalReference(entities:  density0 );
             simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
 
             // Create mesh operation
@@ -279,7 +296,7 @@ namespace SimGH
         }
 
 
-        public static string getSingleEntityName(GeometriesApi geometryApi, string projectId, Guid geometryId,
+        public static List<string> GetEntityByName(GeometriesApi geometryApi, string projectId, Guid geometryId,
                                        List<string> values = null)
         {
             var entities = geometryApi.GetGeometryMappings(
@@ -288,16 +305,18 @@ namespace SimGH
                 attributes: new List<string> { "ATTRIB_XPARASOLID_NAME" },
                 values: values
             ).Embedded;
-            if (entities.Count == 1)
+
+            if (entities.Count != 0)
             {
-                return entities[0].Name;
+                List<string> names = entities.Select(e => e.Name).ToList();
+                return names;
             }
             else
             {
-                throw new Exception("Unexpected number of entities returned");
+                throw new Exception("No entities returned");
             }
         }
-        public static string getSingleEntityColor(GeometriesApi geometryApi, string projectId, Guid geometryId,
+        public static List<string> GetEntityByColor(GeometriesApi geometryApi, string projectId, Guid geometryId,
                                List<string> values = null)
         {
             var entities = geometryApi.GetGeometryMappings(
@@ -306,13 +325,15 @@ namespace SimGH
                 attributes: new List<string> { "SDL/TYSA_COLOUR" },
                 values: values
             ).Embedded;
-            if (entities.Count == 15)
+
+            if (entities.Count != 0)
             {
-                return entities[0].Name;
+                List<string> names = entities.Select(e => e.Name).ToList();
+                return names;
             }
             else
             {
-                throw new Exception("Unexpected number of entities returned");
+                throw new Exception("No entities returned");
             }
         }
 

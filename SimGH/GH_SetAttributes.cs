@@ -19,9 +19,9 @@ namespace SimGH
         /// Initializes a new instance of the GH_AssignFaceAttribute class.
         /// </summary>
         public GH_SetAttributes()
-          : base("SetAttributes", "A",
+          : base("BakeAttributes", "A",
               "Set Colors to condition surfaces, and Material Names to Geometry",
-              "SimGH", "Set")
+              "SimGH", "0_Attribute")
         {
         }
 
@@ -56,7 +56,7 @@ namespace SimGH
             DA.GetDataList(1, inName);
             DA.GetData(2, ref run);
 
-            string layerName = "Export As STEP";
+            string layerName = "Export_STEP";
 
             if (run)
             { 
