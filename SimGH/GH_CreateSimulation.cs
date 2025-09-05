@@ -177,88 +177,61 @@ namespace SimGH
             // Add a material to the simulation
             var materialGroups = materialsApi.GetMaterialGroups().Embedded;
 
-            var defaultMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.USERCUSTOM);
-            if (defaultMaterialGroup == null)
+            var customMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.USERCUSTOM);
+            if (customMaterialGroup == null)
             {
                 throw new Exception("Couldn't find default material group in " + materialGroups);
             }
 
-            var defaultMaterials = materialsApi.GetMaterials(defaultMaterialGroup.MaterialGroupId).Embedded;
+            var customMaterials = materialsApi.GetMaterials(customMaterialGroup.MaterialGroupId).Embedded;
             
-            var poplar0 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar0");
-            if (poplar0 == null)
-            {
-                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
-            }
-            var poplar1 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar1");
-            if (poplar1 == null)
-            {
-                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
-            }
-            var poplar2 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar2");
-            if (poplar2 == null)
-            {
-                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
-            }
+
+            ////starthere
+            //var poplar0 = customMaterials.FirstOrDefault(material => material.Name == "Poplar0");
+            //if (poplar0 == null)
+            //{
+            //    throw new Exception("Couldn't find default Wood material in " + customMaterials);
+            //}
 
 
+            //var poplar0Data = materialsApi.GetMaterialData(customMaterialGroup.MaterialGroupId, poplar0.Id);
 
 
-            var poplar0Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar0.Id);
-            var poplar1Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar1.Id);
-            var poplar2Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar2.Id);
+            //var poplar0UpdateRequest = new MaterialUpdateRequest(
+            //    operations: new List<MaterialUpdateOperation> {
+            //    new MaterialUpdateOperation(
+            //        path: "/materials",
+            //        materialData: poplar0Data,
+            //        reference: new MaterialUpdateOperationReference(
+            //            materialGroupId: defaultMaterialGroup.MaterialGroupId,
+            //            materialId: poplar0.Id
+            //        )
+            //    )
+            //    }
+            //);
 
 
-            var poplar0UpdateRequest = new MaterialUpdateRequest(
-                operations: new List<MaterialUpdateOperation> {
-                new MaterialUpdateOperation(
-                    path: "/materials",
-                    materialData: poplar0Data,
-                    reference: new MaterialUpdateOperationReference(
-                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                        materialId: poplar0.Id
-                    )
-                )
-                }
-            );
+            var material0UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi, 
+                                                        customMaterialGroup, customMaterials, materialName[0]);
+            var material1UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
+                                            customMaterialGroup, customMaterials, materialName[1]);
+            var material2UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
+                                            customMaterialGroup, customMaterials, materialName[2]);
 
-            var poplar1UpdateRequest = new MaterialUpdateRequest(
-                operations: new List<MaterialUpdateOperation> {
-                new MaterialUpdateOperation(
-                    path: "/materials",
-                    materialData: poplar0Data,
-                    reference: new MaterialUpdateOperationReference(
-                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                        materialId: poplar0.Id
-                    )
-                )
-                }
-            );
-
-            var poplar2UpdateRequest = new MaterialUpdateRequest(
-                operations: new List<MaterialUpdateOperation> {
-                new MaterialUpdateOperation(
-                    path: "/materials",
-                    materialData: poplar0Data,
-                    reference: new MaterialUpdateOperationReference(
-                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                        materialId: poplar0.Id
-                    )
-                )
-                }
-            );
-
-            var poplar0UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
-            var poplar1UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
-            var poplar2UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
 
 
             // Add assignments to the new material
             simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
             var materials = ((HeatTransfer)simulationSpec.Model).Materials;
-            (materials[0]).TopologicalReference = new TopologicalReference(entities: density0);
-            (materials[1]).TopologicalReference = new TopologicalReference(entities: density1);
-            (materials[2]).TopologicalReference = new TopologicalReference(entities: density2);
+
+            var material0 = materials.Where(m => m.Name == materialName[0]).FirstOrDefault();
+            var material1 = materials.Where(m => m.Name == materialName[1]).FirstOrDefault();
+            var material2 = materials.Where(m => m.Name == materialName[2]).FirstOrDefault();
+
+
+            material0.TopologicalReference = new TopologicalReference(entities: density0);
+            material1.TopologicalReference = new TopologicalReference(entities: density1);
+            material2.TopologicalReference = new TopologicalReference(entities: density2);
 
             simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
 
@@ -380,6 +353,34 @@ namespace SimGH
             {
                 throw new Exception("No entities returned");
             }
+        }
+
+        public MaterialUpdateResponse UpdateMaterial(string projectId, Guid? simulationId, SimulationsApi simulationApi, MaterialsApi materialsApi, MaterialGroupResponse customMaterialGroup, List<MaterialResponse> customMaterials, string materialName)
+        {
+            var importMaterial = customMaterials.FirstOrDefault(material => material.Name == materialName);
+            if (importMaterial == null)
+            {
+                throw new Exception("Couldn't find default Wood material in " + customMaterials);
+            }
+
+            var materialData = materialsApi.GetMaterialData(customMaterialGroup.MaterialGroupId, importMaterial.Id);
+
+            var materialUpdateRequest = new MaterialUpdateRequest(
+            operations: new List<MaterialUpdateOperation> {
+                            new MaterialUpdateOperation(
+                                path: "/materials",
+                                materialData: materialData,
+                                reference: new MaterialUpdateOperationReference(
+                                    materialGroupId: customMaterialGroup.MaterialGroupId,
+                                    materialId: importMaterial.Id
+                                )
+                            )
+                            }
+            );
+
+            var materialUpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, materialUpdateRequest);
+
+            return materialUpdateResponse;
         }
 
         /// <summary>
