@@ -137,7 +137,7 @@ namespace SimGH
 
                 // Import CAD
                 var geometryImportRequest = new GeometryImportRequest(
-                    name: "Wood",
+                    name: "STEP_from_API",
                     location: new GeometryImportRequestLocation(storageId),
                     format: GeometryImportRequest.FormatEnum.STEP,
                     inputUnit: GeometryUnit.M,

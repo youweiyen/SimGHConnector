@@ -140,27 +140,23 @@ namespace SimGH
                 boundaryConditions: 
                 new List<OneOfHeatTransferBoundaryConditions>()
                 {
-                    //new SurfaceHeatFluxBC(
-                    //    name: "HeatPlate",
-                    //    heatfluxValue: new DimensionalFunctionHeatFlux(),
-                    //    topologicalReference: new TopologicalReference(
-                    //        entities: new List<string>() { bc1Entity }
-                    //    )
-                    //),
-                    //new ConvectiveHeatFluxBC(
-                    //    name: "TopSurface"),
-                    new FixedTemperatureValueBC(
-                        name: "HeatTemperature",
-                        temperatureValue: new DimensionalFunctionTemperature(),
-                        topologicalReference: new TopologicalReference(
-                            entities:  heatEntity )
-                        ),
-                    new FixedTemperatureValueBC(
-                        name: "SurfaceTemperature",
-                        temperatureValue: new DimensionalFunctionTemperature(),
-                        topologicalReference: new TopologicalReference(
-                            entities: convectionEntity )
-                        ),
+                    new SurfaceHeatFluxBC(
+                        name: "SurfaceHeatFlux",
+                        heatfluxValue: new DimensionalFunctionHeatFlux(
+                            value: new ConstantFunction(value: (decimal) 400), 
+                            unit: DimensionalFunctionHeatFlux.UnitEnum.WM),
+                        topologicalReference: new TopologicalReference(entities: heatEntity)),
+
+                    new ConvectiveHeatFluxBC(
+                        name: "ConvectiveHeatFlux",
+                        referenceTemperature: new DimensionalFunctionTemperature(
+                            value: new ConstantFunction(value :(decimal) 20),
+                            unit: DimensionalFunctionTemperature.UnitEnum.C),
+                        heatTransferCoefficient: new DimensionalFunctionThermalTransmittance(
+                            value: new ConstantFunction(value :(decimal) 10),
+                            unit: DimensionalFunctionThermalTransmittance.UnitEnum.WKm),
+                        topologicalReference: new TopologicalReference(entities: convectionEntity))
+
                 },
                 numerics: new SolidNumerics(
                     solver: new MUMPSSolver("MUMPS", new AdvancedMUMPSSettings())
@@ -172,124 +168,176 @@ namespace SimGH
                 resultControl: new SolidResultControl(),
                 meshOrder: default
             );
-            var simulationSpec = new SimulationSpec(name: projectName, geometryId: geometryId, model: simulationModel);
+            var simulationSpec = new SimulationSpec(name: "Heat_Transfer", geometryId: geometryId, model: simulationModel);
 
             // Create simulation first to use for physics based meshing
             var simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
-            Console.WriteLine("simulationId: " + simulationId);
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "simulationId: " + simulationId);
 
             // Add a material to the simulation
             var materialGroups = materialsApi.GetMaterialGroups().Embedded;
-            var defaultMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.SIMSCALEDEFAULT);
+
+            var defaultMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.USERCUSTOM);
             if (defaultMaterialGroup == null)
             {
                 throw new Exception("Couldn't find default material group in " + materialGroups);
             }
 
             var defaultMaterials = materialsApi.GetMaterials(defaultMaterialGroup.MaterialGroupId).Embedded;
-            var Wood1 = defaultMaterials.FirstOrDefault(material => material.Name == "Wood");
-            if (Wood1 == null)
+            
+            var poplar0 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar0");
+            if (poplar0 == null)
             {
-                throw new Exception("Couldn't find default Air material in " + defaultMaterials);
+                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
+            }
+            var poplar1 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar1");
+            if (poplar1 == null)
+            {
+                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
+            }
+            var poplar2 = defaultMaterials.FirstOrDefault(material => material.Name == "Poplar2");
+            if (poplar2 == null)
+            {
+                throw new Exception("Couldn't find default Wood material in " + defaultMaterials);
             }
 
-            var materialData = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, Wood1.Id);
-            var materialUpdateRequest = new MaterialUpdateRequest(
+
+
+
+            var poplar0Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar0.Id);
+            var poplar1Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar1.Id);
+            var poplar2Data = materialsApi.GetMaterialData(defaultMaterialGroup.MaterialGroupId, poplar2.Id);
+
+
+            var poplar0UpdateRequest = new MaterialUpdateRequest(
                 operations: new List<MaterialUpdateOperation> {
                 new MaterialUpdateOperation(
-                    path: "/materials/fluids",
-                    materialData: materialData,
+                    path: "/materials",
+                    materialData: poplar0Data,
                     reference: new MaterialUpdateOperationReference(
                         materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                        materialId: Wood1.Id
+                        materialId: poplar0.Id
                     )
                 )
                 }
             );
-            var materialUpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, materialUpdateRequest);
+
+            var poplar1UpdateRequest = new MaterialUpdateRequest(
+                operations: new List<MaterialUpdateOperation> {
+                new MaterialUpdateOperation(
+                    path: "/materials",
+                    materialData: poplar0Data,
+                    reference: new MaterialUpdateOperationReference(
+                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
+                        materialId: poplar0.Id
+                    )
+                )
+                }
+            );
+
+            var poplar2UpdateRequest = new MaterialUpdateRequest(
+                operations: new List<MaterialUpdateOperation> {
+                new MaterialUpdateOperation(
+                    path: "/materials",
+                    materialData: poplar0Data,
+                    reference: new MaterialUpdateOperationReference(
+                        materialGroupId: defaultMaterialGroup.MaterialGroupId,
+                        materialId: poplar0.Id
+                    )
+                )
+                }
+            );
+
+            var poplar0UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
+            var poplar1UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
+            var poplar2UpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, poplar0UpdateRequest);
+
 
             // Add assignments to the new material
             simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
-            var materials = ((ConvectiveHeatTransfer)simulationSpec.Model).Materials.Fluids;
-            ((IncompressibleMaterial)materials.First()).TopologicalReference = new TopologicalReference(entities:  density0 );
+            var materials = ((HeatTransfer)simulationSpec.Model).Materials;
+            (materials[0]).TopologicalReference = new TopologicalReference(entities: density0);
+            (materials[1]).TopologicalReference = new TopologicalReference(entities: density1);
+            (materials[2]).TopologicalReference = new TopologicalReference(entities: density2);
+
             simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
 
-            // Create mesh operation
-            var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
-                name: "WoodMesh",
-                geometryId: geometryId,
-                model: new SimmetrixMeshingSolid()
-            ));
-            var meshOperationId = meshOperation.MeshOperationId;
-            Console.WriteLine("meshOperationId: " + meshOperationId);
+            //    // Create mesh operation
+            //    var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
+            //        name: "APIMesh",
+            //        geometryId: geometryId,
+            //        model: new SimmetrixMeshingSolid()
+            //    ));
+            //    var meshOperationId = meshOperation.MeshOperationId;
+            //    Console.WriteLine("meshOperationId: " + meshOperationId);
 
-            // Check mesh operation setup
-            var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
-            var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-            Console.WriteLine("Mesh operation setup check warnings:");
-            warnings.ForEach(i => Console.WriteLine("{0}", i));
-            var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
-            if (errors.Any())
-            {
-                Console.WriteLine("Mesh operation setup check errors:");
-                errors.ForEach(i => Console.WriteLine("{0}", i));
-                throw new Exception("Simulation check failed");
-            }
+            //    // Check mesh operation setup
+            //    var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
+            //    var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+            //    Console.WriteLine("Mesh operation setup check warnings:");
+            //    warnings.ForEach(i => Console.WriteLine("{0}", i));
+            //    var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+            //    if (errors.Any())
+            //    {
+            //        Console.WriteLine("Mesh operation setup check errors:");
+            //        errors.ForEach(i => Console.WriteLine("{0}", i));
+            //        throw new Exception("Simulation check failed");
+            //    }
 
-            // Estimate mesh operation
-            var maxRuntime = 0.0;
-            try
-            {
-                var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
-                Console.WriteLine("Mesh operation estimation: " + estimationResult);
+            //    // Estimate mesh operation
+            //    var maxRuntime = 0.0;
+            //    try
+            //    {
+            //        var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
+            //        Console.WriteLine("Mesh operation estimation: " + estimationResult);
 
-                if (estimationResult.Duration != null)
-                {
-                    maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
-                    maxRuntime = Math.Max(3600, maxRuntime * 2);
-                }
-                else
-                {
-                    maxRuntime = 36000;
-                    Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
-                }
-            }
-            catch (ApiException ae)
-            {
-                if (ae.ErrorCode == 422)
-                {
-                    maxRuntime = 36000;
-                    Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
-                }
-                else
-                {
-                    throw ae;
-                }
-            }
+            //        if (estimationResult.Duration != null)
+            //        {
+            //            maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
+            //            maxRuntime = Math.Max(3600, maxRuntime * 2);
+            //        }
+            //        else
+            //        {
+            //            maxRuntime = 36000;
+            //            Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
+            //        }
+            //    }
+            //    catch (ApiException ae)
+            //    {
+            //        if (ae.ErrorCode == 422)
+            //        {
+            //            maxRuntime = 36000;
+            //            Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
+            //        }
+            //        else
+            //        {
+            //            throw ae;
+            //        }
+            //    }
 
-            // Start mesh operation and wait until it's finished
-            meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
-            meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
+            //    // Start mesh operation and wait until it's finished
+            //    meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
+            //    meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
 
-            Stopwatch stopWatch = Stopwatch.StartNew();
-            HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
+            //    Stopwatch stopWatch = Stopwatch.StartNew();
+            //    HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
 
 
-            stopWatch.Restart();
-            int failedTries = 0;
-            while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
-            {
-                if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
-                {
-                    throw new TimeoutException();
-                }
-                Thread.Sleep(30000);
-                meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
-                    (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-                Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
-            }
+            //    stopWatch.Restart();
+            //    int failedTries = 0;
+            //    while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
+            //    {
+            //        if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
+            //        {
+            //            throw new TimeoutException();
+            //        }
+            //        Thread.Sleep(30000);
+            //        meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
+            //            (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
+            //        Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+            //    }
 
-            Console.WriteLine("final mesh operation: " + meshOperation);
+            //    Console.WriteLine("final mesh operation: " + meshOperation);
         }
 
 
