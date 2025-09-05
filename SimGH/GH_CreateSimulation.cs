@@ -37,7 +37,7 @@ namespace SimGH
             pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
-            pManager.AddTextParameter("Name", "N", "Material Name", GH_ParamAccess.list);
+            pManager.AddTextParameter("MaterialName", "N", "Material Name", GH_ParamAccess.list);
             pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
 
         }
@@ -47,8 +47,12 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-
+            pManager.AddGenericParameter("SimulationApi", "API", "Simulation API", GH_ParamAccess.item);
+            pManager.AddGenericParameter("SimulationID", "ID", "Simulation ID", GH_ParamAccess.item);
         }
+
+        SimulationsApi simulationApi = new SimulationsApi();
+        Guid? simulationId = default;
 
         /// <summary>
         /// This is the method that actually does the work.
@@ -72,13 +76,16 @@ namespace SimGH
 
             if(create)
             {
+                simulationApi = new SimulationsApi();
+                simulationId = default;
+
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Running");
 
                 Guid geometryId = new Guid(geometryIdText);
 
                 var geometryApi = new GeometriesApi(config);
                 var meshOperationApi = new MeshOperationsApi(config);
-                var simulationApi = new SimulationsApi(config);
+                simulationApi = new SimulationsApi(config);
                 var materialsApi = new MaterialsApi(config);
 
                 //var simulationRunApi = new SimulationRunsApi(config);
@@ -180,7 +187,7 @@ namespace SimGH
                 var simulationSpec = new SimulationSpec(name: "Heat_Transfer", geometryId: geometryId, model: simulationModel);
 
                 // Create simulation first to use for physics based meshing
-                var simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
+                simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "simulationId: " + simulationId);
 
                 // Add a material to the simulation
@@ -194,31 +201,6 @@ namespace SimGH
 
                 var customMaterials = materialsApi.GetMaterials(customMaterialGroup.MaterialGroupId).Embedded;
             
-
-                ////starthere
-                //var poplar0 = customMaterials.FirstOrDefault(material => material.Name == "Poplar0");
-                //if (poplar0 == null)
-                //{
-                //    throw new Exception("Couldn't find default Wood material in " + customMaterials);
-                //}
-
-
-                //var poplar0Data = materialsApi.GetMaterialData(customMaterialGroup.MaterialGroupId, poplar0.Id);
-
-
-                //var poplar0UpdateRequest = new MaterialUpdateRequest(
-                //    operations: new List<MaterialUpdateOperation> {
-                //    new MaterialUpdateOperation(
-                //        path: "/materials",
-                //        materialData: poplar0Data,
-                //        reference: new MaterialUpdateOperationReference(
-                //            materialGroupId: defaultMaterialGroup.MaterialGroupId,
-                //            materialId: poplar0.Id
-                //        )
-                //    )
-                //    }
-                //);
-
 
                 var material0UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi, 
                                                             customMaterialGroup, customMaterials, materialName[0]);
@@ -322,7 +304,24 @@ namespace SimGH
                 simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
                 simulationSpec.MeshId = meshOperation.MeshId;
                 simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+
+                // Check simulation
+                var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
+                warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+                Console.WriteLine("Simulation check warnings:");
+                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+                if (errors.Any())
+                {
+                    Console.WriteLine("Simulation check errors:");
+                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    throw new Exception("Simulation check failed");
+                }
+
             }
+
+            DA.SetData(0, simulationId);
+            DA.SetData(1, simulationApi);
 
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Created Simulation");
 

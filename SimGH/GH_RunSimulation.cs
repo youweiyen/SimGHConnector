@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-
+using System.Diagnostics;
 using Grasshopper.Kernel;
 using RestSharp;
 using Rhino.Geometry;
 using SimScale.Sdk.Api;
 using SimScale.Sdk.Client;
 using SimScale.Sdk.Model;
+using System.Threading;
+using System.IO;
 
 namespace SimGH
 {
@@ -17,7 +19,7 @@ namespace SimGH
         /// </summary>
         public GH_RunSimulation()
           : base("RunSim", "Run",
-              "Check and Run Simulation",
+              "Run and Download Simulation Results",
               "SimGH", "1_SimScale")
         {
         }
@@ -27,6 +29,12 @@ namespace SimGH
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
+            pManager.AddTextParameter("ProjectID", "P", "Project ID to access project", GH_ParamAccess.item);
+            pManager.AddGenericParameter("Configuration", "C", "API client Configuration", GH_ParamAccess.item);
+            pManager.AddTextParameter("APIKey", "K", "Your API Key", GH_ParamAccess.item);
+            pManager.AddGenericParameter("SimulationApi", "API", "Simulation API", GH_ParamAccess.item);
+            pManager.AddGenericParameter("SimulationID", "ID", "Simulation ID", GH_ParamAccess.item);
+
         }
 
         /// <summary>
@@ -42,27 +50,28 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            string projectId = default;
+            SimScale.Sdk.Client.Configuration config = default;
+            string apiKey = default;
+            SimulationsApi simulationApi = new SimulationsApi();
+            Guid? simulationId = default;
 
-            // Read simulation and update with the finished mesh
-            simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
-            simulationSpec.MeshId = meshOperation.MeshId;
-            simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+            DA.GetData(0, ref projectId);
+            DA.GetData(1, ref config);
+            DA.GetData(2, ref apiKey);
+            DA.GetData(3, ref simulationApi);
+            DA.GetData(4, ref simulationId);
 
-            // Check simulation
-            var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
-            warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-            Console.WriteLine("Simulation check warnings:");
-            warnings.ForEach(i => Console.WriteLine("{0}", i));
-            errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
-            if (errors.Any())
-            {
-                Console.WriteLine("Simulation check errors:");
-                errors.ForEach(i => Console.WriteLine("{0}", i));
-                throw new Exception("Simulation check failed");
-            }
+
+            var simulationRunApi = new SimulationRunsApi(config);
+
+            var restClient = new RestClient();
+
+            var API_KEY_HEADER = "X-API-KEY";
+            var API_KEY = apiKey;
 
             // Estimate simulation
-            maxRuntime = 0.0;
+            var maxRuntime = 0.0;
             try
             {
                 var estimationResult = simulationApi.EstimateSimulationSetup(projectId, simulationId);
@@ -93,7 +102,7 @@ namespace SimGH
             }
 
             // Create simulation run
-            var run = new SimulationRun(name: "Run 1");
+            var run = new SimulationRun(name: "Run");
             run = simulationRunApi.CreateSimulationRun(projectId, simulationId, run);
             var runId = run.RunId;
             Console.WriteLine("runId: " + runId);
@@ -105,8 +114,12 @@ namespace SimGH
             // Start simulation run and wait until it's finished
             simulationRunApi.StartSimulationRun(projectId, simulationId, runId);
             run = simulationRunApi.GetSimulationRun(projectId, simulationId, runId);
-            stopWatch.Restart();
-            failedTries = 0;
+
+            HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
+
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            int failedTries = 0;
             while (!terminalStatuses.Contains(run.Status ?? Status.READY))
             {
                 if (stopWatch.Elapsed.TotalSeconds > maxRuntime)

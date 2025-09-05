@@ -31,7 +31,7 @@ namespace SimGH
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddBrepParameter("Extrusion", "E", "Geometry Extrusion", GH_ParamAccess.tree);
-            pManager.AddTextParameter("Name", "N", "Material Name", GH_ParamAccess.list);
+            pManager.AddTextParameter("´MaterialName", "N", "Material Name", GH_ParamAccess.list);
             pManager.AddBooleanParameter("Run", "T", "Set True to run", GH_ParamAccess.item);
         }
 
