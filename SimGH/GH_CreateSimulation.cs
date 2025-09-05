@@ -38,7 +38,7 @@ namespace SimGH
             pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
             pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
             pManager.AddTextParameter("Name", "N", "Material Name", GH_ParamAccess.list);
-
+            pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
 
         }
 
@@ -60,180 +60,186 @@ namespace SimGH
             string projectId = default;
             string geometryIdText = default;
             SimScale.Sdk.Client.Configuration config = default;
-            List<string> materialName = new List<string>(); 
+            List<string> materialName = new List<string>();
+            bool create = false;
 
             DA.GetData(0, ref projectName);
             DA.GetData(1, ref projectId);
             DA.GetData(2, ref geometryIdText);
             DA.GetData(3, ref config);
             DA.GetDataList(4, materialName);
+            DA.GetData(5, ref create);
 
-            Guid geometryId = new Guid(geometryIdText);
-
-            var geometryApi = new GeometriesApi(config);
-            var meshOperationApi = new MeshOperationsApi(config);
-            var simulationApi = new SimulationsApi(config);
-            var materialsApi = new MaterialsApi(config);
-
-            //var simulationRunApi = new SimulationRunsApi(config);
-            //var tableImportApi = new TableImportsApi(config);
-            //var reportsApi = new ReportsApi(config);
-
-            // Read geometry information and update with the deserialized model
-            var geometry = geometryApi.GetGeometry(projectId, geometryId);
-            geometryApi.UpdateGeometry(projectId, geometryId, geometry);
-
-            // Get geometry mappings
-
-            //var bc1Entity = geometryApi.GetGeometryMappings(
-            //    projectId: projectId,
-            //    geometryId: geometryId,
-            //    _class: "face"
-            //).Embedded;
-            //var bc2entity = geometryApi.GetGeometryMappings(
-            //    projectId: projectId,
-            //    geometryId: geometryId,
-            //    _class: "region"
-            //).Embedded;
-
-            var density0 = GetEntityByName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { materialName[0] }
-            );
-            var density1 = GetEntityByName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { materialName[1] }
-            );
-            var density2 = GetEntityByName(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { materialName[2] }
-            );
-            var heatEntity = GetEntityByColor(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "[1 0 0]" }
-            );
-            var convectionEntity = GetEntityByColor(
-                geometryApi,
-                projectId,
-                geometryId,
-                values: new List<string> { "[0 0 1]" }
-            );
-
-
-            // Initialize simulation model
-            var simulationModel = new HeatTransfer (
-                timeDependency: default,
-                nonLinearAnalysis: false,
-                connectionGroups: new List<Contact>(),
-                elementTechnology: new SolidElementTechnology(new ElementTechnology(new AutomaticElementDefinitionMethod())),
-                model: new SolidModel(),
-                materials: new List<SolidMaterial>(),
-                initialConditions: new SolidInitialConditions(),
-                boundaryConditions: 
-                new List<OneOfHeatTransferBoundaryConditions>()
-                {
-                    new SurfaceHeatFluxBC(
-                        name: "SurfaceHeatFlux",
-                        heatfluxValue: new DimensionalFunctionHeatFlux(
-                            value: new ConstantFunction(value: (decimal) 400), 
-                            unit: DimensionalFunctionHeatFlux.UnitEnum.WM),
-                        topologicalReference: new TopologicalReference(entities: heatEntity)),
-
-                    new ConvectiveHeatFluxBC(
-                        name: "ConvectiveHeatFlux",
-                        referenceTemperature: new DimensionalFunctionTemperature(
-                            value: new ConstantFunction(value :(decimal) 20),
-                            unit: DimensionalFunctionTemperature.UnitEnum.C),
-                        heatTransferCoefficient: new DimensionalFunctionThermalTransmittance(
-                            value: new ConstantFunction(value :(decimal) 10),
-                            unit: DimensionalFunctionThermalTransmittance.UnitEnum.WKm),
-                        topologicalReference: new TopologicalReference(entities: convectionEntity))
-
-                },
-                numerics: new SolidNumerics(
-                    solver: new MUMPSSolver("MUMPS", new AdvancedMUMPSSettings())
-                    ),
-                
-                simulationControl: new SolidSimulationControl(
-                    processors: new ComputingCore(),
-                    maxRunTime: new DimensionalTime(3600, DimensionalTime.UnitEnum.S)),
-                resultControl: new SolidResultControl(),
-                meshOrder: default
-            );
-            var simulationSpec = new SimulationSpec(name: "Heat_Transfer", geometryId: geometryId, model: simulationModel);
-
-            // Create simulation first to use for physics based meshing
-            var simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "simulationId: " + simulationId);
-
-            // Add a material to the simulation
-            var materialGroups = materialsApi.GetMaterialGroups().Embedded;
-
-            var customMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.USERCUSTOM);
-            if (customMaterialGroup == null)
+            if(create)
             {
-                throw new Exception("Couldn't find default material group in " + materialGroups);
-            }
 
-            var customMaterials = materialsApi.GetMaterials(customMaterialGroup.MaterialGroupId).Embedded;
+                Guid geometryId = new Guid(geometryIdText);
+
+                var geometryApi = new GeometriesApi(config);
+                var meshOperationApi = new MeshOperationsApi(config);
+                var simulationApi = new SimulationsApi(config);
+                var materialsApi = new MaterialsApi(config);
+
+                //var simulationRunApi = new SimulationRunsApi(config);
+                //var tableImportApi = new TableImportsApi(config);
+                //var reportsApi = new ReportsApi(config);
+
+                // Read geometry information and update with the deserialized model
+                var geometry = geometryApi.GetGeometry(projectId, geometryId);
+                geometryApi.UpdateGeometry(projectId, geometryId, geometry);
+
+                // Get geometry mappings
+
+                //var bc1Entity = geometryApi.GetGeometryMappings(
+                //    projectId: projectId,
+                //    geometryId: geometryId,
+                //    _class: "face"
+                //).Embedded;
+                //var bc2entity = geometryApi.GetGeometryMappings(
+                //    projectId: projectId,
+                //    geometryId: geometryId,
+                //    _class: "region"
+                //).Embedded;
+
+                var geometry0 = GetEntityByName(
+                    geometryApi,
+                    projectId,
+                    geometryId,
+                    values: new List<string> { materialName[0] }
+                );
+                var geometry1 = GetEntityByName(
+                    geometryApi,
+                    projectId,
+                    geometryId,
+                    values: new List<string> { materialName[1] }
+                );
+                var geometry2 = GetEntityByName(
+                    geometryApi,
+                    projectId,
+                    geometryId,
+                    values: new List<string> { materialName[2] }
+                );
+                var heatEntity = GetEntityByColor(
+                    geometryApi,
+                    projectId,
+                    geometryId,
+                    values: new List<string> { "[1 0 0]" }
+                );
+                var convectionEntity = GetEntityByColor(
+                    geometryApi,
+                    projectId,
+                    geometryId,
+                    values: new List<string> { "[0 0 1]" }
+                );
+
+
+                // Initialize simulation model
+                var simulationModel = new HeatTransfer (
+                    timeDependency: default,
+                    nonLinearAnalysis: false,
+                    connectionGroups: new List<Contact>() 
+                    { 
+                        //new Contact(nodeMergingBonded: true, connections: new List<OneOfContactConnections>() { new BondedContact}) 
+                    },
+                    elementTechnology: new SolidElementTechnology(new ElementTechnology(new AutomaticElementDefinitionMethod())),
+                    model: new SolidModel(),
+                    materials: new List<SolidMaterial>(),
+                    initialConditions: new SolidInitialConditions(),
+                    boundaryConditions: 
+                    new List<OneOfHeatTransferBoundaryConditions>()
+                    {
+                        new SurfaceHeatFluxBC(
+                            name: "SurfaceHeatFlux",
+                            heatfluxValue: new DimensionalFunctionHeatFlux(
+                                value: new ConstantFunction(value: (decimal) 400), 
+                                unit: DimensionalFunctionHeatFlux.UnitEnum.WM),
+                            topologicalReference: new TopologicalReference(entities: heatEntity)),
+
+                        new ConvectiveHeatFluxBC(
+                            name: "ConvectiveHeatFlux",
+                            referenceTemperature: new DimensionalFunctionTemperature(
+                                value: new ConstantFunction(value :(decimal) 20),
+                                unit: DimensionalFunctionTemperature.UnitEnum.C),
+                            heatTransferCoefficient: new DimensionalFunctionThermalTransmittance(
+                                value: new ConstantFunction(value :(decimal) 10),
+                                unit: DimensionalFunctionThermalTransmittance.UnitEnum.WKm),
+                            topologicalReference: new TopologicalReference(entities: convectionEntity))
+
+                    },
+                    numerics: new SolidNumerics(
+                        solver: new MUMPSSolver("MUMPS", new AdvancedMUMPSSettings())
+                        ),
+                
+                    simulationControl: new SolidSimulationControl(
+                        processors: new ComputingCore(),
+                        maxRunTime: new DimensionalTime(3600, DimensionalTime.UnitEnum.S)),
+                    resultControl: new SolidResultControl(),
+                    meshOrder: default
+                );
+                var simulationSpec = new SimulationSpec(name: "Heat_Transfer", geometryId: geometryId, model: simulationModel);
+
+                // Create simulation first to use for physics based meshing
+                var simulationId = simulationApi.CreateSimulation(projectId, simulationSpec).SimulationId;
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "simulationId: " + simulationId);
+
+                // Add a material to the simulation
+                var materialGroups = materialsApi.GetMaterialGroups().Embedded;
+
+                var customMaterialGroup = materialGroups.FirstOrDefault(group => group.GroupType == MaterialGroupType.USERCUSTOM);
+                if (customMaterialGroup == null)
+                {
+                    throw new Exception("Couldn't find default material group in " + materialGroups);
+                }
+
+                var customMaterials = materialsApi.GetMaterials(customMaterialGroup.MaterialGroupId).Embedded;
             
 
-            ////starthere
-            //var poplar0 = customMaterials.FirstOrDefault(material => material.Name == "Poplar0");
-            //if (poplar0 == null)
-            //{
-            //    throw new Exception("Couldn't find default Wood material in " + customMaterials);
-            //}
+                ////starthere
+                //var poplar0 = customMaterials.FirstOrDefault(material => material.Name == "Poplar0");
+                //if (poplar0 == null)
+                //{
+                //    throw new Exception("Couldn't find default Wood material in " + customMaterials);
+                //}
 
 
-            //var poplar0Data = materialsApi.GetMaterialData(customMaterialGroup.MaterialGroupId, poplar0.Id);
+                //var poplar0Data = materialsApi.GetMaterialData(customMaterialGroup.MaterialGroupId, poplar0.Id);
 
 
-            //var poplar0UpdateRequest = new MaterialUpdateRequest(
-            //    operations: new List<MaterialUpdateOperation> {
-            //    new MaterialUpdateOperation(
-            //        path: "/materials",
-            //        materialData: poplar0Data,
-            //        reference: new MaterialUpdateOperationReference(
-            //            materialGroupId: defaultMaterialGroup.MaterialGroupId,
-            //            materialId: poplar0.Id
-            //        )
-            //    )
-            //    }
-            //);
+                //var poplar0UpdateRequest = new MaterialUpdateRequest(
+                //    operations: new List<MaterialUpdateOperation> {
+                //    new MaterialUpdateOperation(
+                //        path: "/materials",
+                //        materialData: poplar0Data,
+                //        reference: new MaterialUpdateOperationReference(
+                //            materialGroupId: defaultMaterialGroup.MaterialGroupId,
+                //            materialId: poplar0.Id
+                //        )
+                //    )
+                //    }
+                //);
 
 
-            var material0UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi, 
-                                                        customMaterialGroup, customMaterials, materialName[0]);
-            var material1UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
-                                            customMaterialGroup, customMaterials, materialName[1]);
-            var material2UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
-                                            customMaterialGroup, customMaterials, materialName[2]);
+                var material0UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi, 
+                                                            customMaterialGroup, customMaterials, materialName[0]);
+                var material1UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
+                                                customMaterialGroup, customMaterials, materialName[1]);
+                var material2UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
+                                                customMaterialGroup, customMaterials, materialName[2]);
 
+                // Add assignments to the new material
+                simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
+                var materials = ((HeatTransfer)simulationSpec.Model).Materials;
 
+                var material0 = materials.Where(m => m.Name == materialName[0]).First();
+                var material1 = materials.Where(m => m.Name == materialName[1]).First();
+                var material2 = materials.Where(m => m.Name == materialName[2]).First();
 
-            // Add assignments to the new material
-            simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
-            var materials = ((HeatTransfer)simulationSpec.Model).Materials;
+                material0.TopologicalReference = new TopologicalReference(entities: geometry0);
+                material1.TopologicalReference = new TopologicalReference(entities: geometry1);
+                material2.TopologicalReference = new TopologicalReference(entities: geometry2);
 
-            var material0 = materials.Where(m => m.Name == materialName[0]).FirstOrDefault();
-            var material1 = materials.Where(m => m.Name == materialName[1]).FirstOrDefault();
-            var material2 = materials.Where(m => m.Name == materialName[2]).FirstOrDefault();
-
-
-            material0.TopologicalReference = new TopologicalReference(entities: density0);
-            material1.TopologicalReference = new TopologicalReference(entities: density1);
-            material2.TopologicalReference = new TopologicalReference(entities: density2);
-
-            simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+                simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+            }
 
             //    // Create mesh operation
             //    var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
