@@ -239,84 +239,84 @@ namespace SimGH
                 material2.TopologicalReference = new TopologicalReference(entities: geometry2);
 
                 simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+
+                // Create mesh operation
+                var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
+                    name: "APIMesh",
+                    geometryId: geometryId,
+                    model: new SimmetrixMeshingSolid()
+                ));
+                var meshOperationId = meshOperation.MeshOperationId;
+                Console.WriteLine("meshOperationId: " + meshOperationId);
+
+                // Check mesh operation setup
+                var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
+                var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+                Console.WriteLine("Mesh operation setup check warnings:");
+                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+                if (errors.Any())
+                {
+                    Console.WriteLine("Mesh operation setup check errors:");
+                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    throw new Exception("Simulation check failed");
+                }
+
+                // Estimate mesh operation
+                var maxRuntime = 0.0;
+                try
+                {
+                    var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
+                    Console.WriteLine("Mesh operation estimation: " + estimationResult);
+
+                    if (estimationResult.Duration != null)
+                    {
+                        maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
+                        maxRuntime = Math.Max(3600, maxRuntime * 2);
+                    }
+                    else
+                    {
+                        maxRuntime = 36000;
+                        Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
+                    }
+                }
+                catch (ApiException ae)
+                {
+                    if (ae.ErrorCode == 422)
+                    {
+                        maxRuntime = 36000;
+                        Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
+                    }
+                    else
+                    {
+                        throw ae;
+                    }
+                }
+
+                // Start mesh operation and wait until it's finished
+                meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
+                meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
+
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
+
+
+                stopWatch.Restart();
+                int failedTries = 0;
+                while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
+                {
+                    if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
+                    {
+                        throw new TimeoutException();
+                    }
+                    Thread.Sleep(30000);
+                    meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
+                        (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
+                    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+                }
+
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,"final mesh operation: " + meshOperation);
             }
-
-            //    // Create mesh operation
-            //    var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
-            //        name: "APIMesh",
-            //        geometryId: geometryId,
-            //        model: new SimmetrixMeshingSolid()
-            //    ));
-            //    var meshOperationId = meshOperation.MeshOperationId;
-            //    Console.WriteLine("meshOperationId: " + meshOperationId);
-
-            //    // Check mesh operation setup
-            //    var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
-            //    var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-            //    Console.WriteLine("Mesh operation setup check warnings:");
-            //    warnings.ForEach(i => Console.WriteLine("{0}", i));
-            //    var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
-            //    if (errors.Any())
-            //    {
-            //        Console.WriteLine("Mesh operation setup check errors:");
-            //        errors.ForEach(i => Console.WriteLine("{0}", i));
-            //        throw new Exception("Simulation check failed");
-            //    }
-
-            //    // Estimate mesh operation
-            //    var maxRuntime = 0.0;
-            //    try
-            //    {
-            //        var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
-            //        Console.WriteLine("Mesh operation estimation: " + estimationResult);
-
-            //        if (estimationResult.Duration != null)
-            //        {
-            //            maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
-            //            maxRuntime = Math.Max(3600, maxRuntime * 2);
-            //        }
-            //        else
-            //        {
-            //            maxRuntime = 36000;
-            //            Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
-            //        }
-            //    }
-            //    catch (ApiException ae)
-            //    {
-            //        if (ae.ErrorCode == 422)
-            //        {
-            //            maxRuntime = 36000;
-            //            Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
-            //        }
-            //        else
-            //        {
-            //            throw ae;
-            //        }
-            //    }
-
-            //    // Start mesh operation and wait until it's finished
-            //    meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
-            //    meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
-
-            //    Stopwatch stopWatch = Stopwatch.StartNew();
-            //    HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
-
-
-            //    stopWatch.Restart();
-            //    int failedTries = 0;
-            //    while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
-            //    {
-            //        if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
-            //        {
-            //            throw new TimeoutException();
-            //        }
-            //        Thread.Sleep(30000);
-            //        meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
-            //            (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-            //        Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
-            //    }
-
-            //    Console.WriteLine("final mesh operation: " + meshOperation);
         }
 
 
