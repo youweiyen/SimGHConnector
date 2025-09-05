@@ -22,7 +22,7 @@ namespace SimGH
         /// Initializes a new instance of the GH_CreateSimulation class.
         /// </summary>
         public GH_CreateSimulation()
-          : base("CreateSim", "CS",
+          : base("CreateSim", "Create",
               "Create Simulation Model",
               "SimGH", "1_SimScale")
         {
@@ -72,6 +72,7 @@ namespace SimGH
 
             if(create)
             {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Running");
 
                 Guid geometryId = new Guid(geometryIdText);
 
@@ -315,8 +316,16 @@ namespace SimGH
                     Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
                 }
 
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,"final mesh operation: " + meshOperation);
+                Console.WriteLine("final mesh operation: " + meshOperation);
+
+                // Read simulation and update with the finished mesh
+                simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
+                simulationSpec.MeshId = meshOperation.MeshId;
+                simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
             }
+
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Created Simulation");
+
         }
 
 

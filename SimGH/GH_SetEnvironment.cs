@@ -30,7 +30,7 @@ namespace SimGH
         /// new tabs/panels will automatically be created.
         /// </summary>
         public GH_SetEnvironment()
-          : base("SetEnv", "SE",
+          : base("SetEnv", "Set",
             "Set up connection environment for SimScale",
             "SimGH", "1_SimScale")
         {
@@ -125,7 +125,7 @@ namespace SimGH
                 );
                 project = projectApi.CreateProject(project);
                 projectId = project.ProjectId;
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "projectId: " + projectId);
+                Console.WriteLine("projectId: " + projectId);
 
                 // Upload CAD
                 var storage = storageApi.CreateStorage();
@@ -133,7 +133,7 @@ namespace SimGH
                 var uploadRequest = new RestRequest(storage.Url, Method.PUT);
                 uploadRequest.AddParameter("application/octet-stream", System.IO.File.ReadAllBytes(@filePath), ParameterType.RequestBody);
                 restClient.Execute(uploadRequest);
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "storageId: " + storageId);
+                Console.WriteLine("storageId: " + storageId);
 
                 // Import CAD
                 var geometryImportRequest = new GeometryImportRequest(
@@ -157,15 +157,17 @@ namespace SimGH
                     Thread.Sleep(10000);
                     geometryImport = geometryImportApi.GetGeometryImport(projectId, geometryImportId) ??
                         (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : geometryImport);
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Geometry import status: " + geometryImport?.Status);
+                    Console.WriteLine("Geometry import status: " + geometryImport?.Status);
                 }
                 geometryId = geometryImport.GeometryId.Value;
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "geometryId: " + geometryId);
+                Console.WriteLine( "geometryId: " + geometryId);
             }
 
             DA.SetData(0, projectId);
             DA.SetData(1, geometryId);
             DA.SetData(2, config);
+
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Successfully Set Environment");
 
         }
 

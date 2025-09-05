@@ -13,15 +13,15 @@ using SimScale.Sdk.Model;
 
 namespace SimGH
 {
-    public class GH_SetAttributes : GH_Component
+    public class GH_BakeAttributes : GH_Component
     {
         /// <summary>
         /// Initializes a new instance of the GH_AssignFaceAttribute class.
         /// </summary>
-        public GH_SetAttributes()
-          : base("BakeAttributes", "A",
+        public GH_BakeAttributes()
+          : base("BakeAttributes", "Bake",
               "Set Colors to condition surfaces, and Material Names to Geometry",
-              "SimGH", "0_Attribute")
+              "SimGH", "0_Rhino")
         {
         }
 
