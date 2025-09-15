@@ -53,8 +53,7 @@ namespace SimGH
             pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
         }
 
-        //SimulationsApi simulationApi = new SimulationsApi();
-        //Guid? simulationId = default;
+
         SimProjectInfo simProjectInfo = new SimProjectInfo();
 
         /// <summary>
@@ -81,7 +80,6 @@ namespace SimGH
 
                 Guid geometryId = simProjectInfo.GeometryId;
                 string projectId = simProjectInfo.ProjectId;
-
 
                 SimScale.Sdk.Client.Configuration config = simProjectInfo.Configuration;
 
