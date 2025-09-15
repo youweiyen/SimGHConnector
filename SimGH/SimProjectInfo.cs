@@ -13,7 +13,6 @@ namespace SimGH
     public class SimProjectInfo
     {
         public SimProjectInfo() { }
-
         public SimulationsApi SimulationApi { get; private set; }
         public Guid? SimulationId { get; private set; }
         public GeometriesApi GeometryApi  { get; private set; }
@@ -24,6 +23,9 @@ namespace SimGH
         public ReportsApi ReportsApi { get; private set; }
         public string ProjectName {  get; private set; }
         public Configuration Configuration { get; private set; }
+        public string ProjectId { get; private set; }
+        public Guid GeometryId { get; private set; }
+
 
         public void SetSimulationApi(SimulationsApi simulationsApi) => SimulationApi = simulationsApi;
         public void SetSimulationId(Guid? guid) => SimulationId = guid;
@@ -35,6 +37,10 @@ namespace SimGH
         public void SetReportsApi(ReportsApi reportsApi) => ReportsApi = reportsApi;
         public void SetProjectName(string projectName) => ProjectName = projectName;
         public void SetConfiguration(Configuration configuration) => Configuration = configuration;
+        public void SetProjectId(string projectId) => ProjectId = projectId;
+        public void SetGeometryId(Guid geometryId) => GeometryId = geometryId;
+
+
 
     }
 }

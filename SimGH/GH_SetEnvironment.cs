@@ -54,14 +54,13 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddTextParameter("ProjectID", "P", "Project ID to access project", GH_ParamAccess.item);
-            pManager.AddGenericParameter("GeometryID", "G", "Geometry ID to access geometry", GH_ParamAccess.item);
-            pManager.AddGenericParameter("Configuration", "C", "API client Configuration", GH_ParamAccess.item);
+            //pManager.AddTextParameter("ProjectID", "P", "Project ID to access project", GH_ParamAccess.item);
+            //pManager.AddGenericParameter("GeometryID", "G", "Geometry ID to access geometry", GH_ParamAccess.item);
+            //pManager.AddGenericParameter("Configuration", "C", "API client Configuration", GH_ParamAccess.item);
+            pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
         }
 
-        string projectId = default;
-        Guid geometryId = default;
-        Configuration config = new Configuration();
+        SimProjectInfo simProjectInfo = new SimProjectInfo();
 
         /// <summary>
         /// This is the method that actually does the work.
@@ -85,9 +84,9 @@ namespace SimGH
 
             if (upload)
             {
-                projectId = default;
-                geometryId = default;
-                config = new Configuration();
+                string projectId = default;
+                Guid geometryId = default;
+                Configuration config = new Configuration();
 
                 // API client configuration
                 var API_KEY_HEADER = "X-API-KEY";
@@ -161,11 +160,17 @@ namespace SimGH
                 }
                 geometryId = geometryImport.GeometryId.Value;
                 Console.WriteLine( "geometryId: " + geometryId);
+
+                simProjectInfo.SetProjectName(projectName);
+                simProjectInfo.SetProjectId(projectId);
+                simProjectInfo.SetGeometryId(geometryId);
+                simProjectInfo.SetConfiguration(config);
             }
 
-            DA.SetData(0, projectId);
-            DA.SetData(1, geometryId);
-            DA.SetData(2, config);
+            //DA.SetData(0, projectId);
+            //DA.SetData(1, geometryId);
+            //DA.SetData(2, config);
+            DA.SetData(0, simProjectInfo);
 
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Successfully Set Environment");
 

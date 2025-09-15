@@ -33,10 +33,11 @@ namespace SimGH
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
-            pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
-            pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
-            pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
-            pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
+            //pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
+            //pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
+            //pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
+            //pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
+            pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
             pManager.AddTextParameter("MaterialName", "N", "Material Name", GH_ParamAccess.list);
             pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
 
@@ -47,12 +48,14 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddGenericParameter("SimulationApi", "API", "Simulation API", GH_ParamAccess.item);
-            pManager.AddGenericParameter("SimulationID", "ID", "Simulation ID", GH_ParamAccess.item);
+            //pManager.AddGenericParameter("SimulationApi", "API", "Simulation API", GH_ParamAccess.item);
+            //pManager.AddGenericParameter("SimulationID", "ID", "Simulation ID", GH_ParamAccess.item);
+            pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
         }
 
-        SimulationsApi simulationApi = new SimulationsApi();
-        Guid? simulationId = default;
+        //SimulationsApi simulationApi = new SimulationsApi();
+        //Guid? simulationId = default;
+        SimProjectInfo simProjectInfo = new SimProjectInfo();
 
         /// <summary>
         /// This is the method that actually does the work.
@@ -60,28 +63,27 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            string projectName = default;
-            string projectId = default;
-            string geometryIdText = default;
-            SimScale.Sdk.Client.Configuration config = default;
             List<string> materialName = new List<string>();
             bool create = false;
 
-            DA.GetData(0, ref projectName);
-            DA.GetData(1, ref projectId);
-            DA.GetData(2, ref geometryIdText);
-            DA.GetData(3, ref config);
-            DA.GetDataList(4, materialName);
-            DA.GetData(5, ref create);
+            DA.GetData(0, ref simProjectInfo);
+            DA.GetDataList(1, materialName);
+            DA.GetData(2, ref create);
+
 
             if(create)
             {
-                simulationApi = new SimulationsApi();
-                simulationId = default;
+
+                SimulationsApi simulationApi = new SimulationsApi();
+                Guid? simulationId = default;
 
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Running");
 
-                Guid geometryId = new Guid(geometryIdText);
+                Guid geometryId = simProjectInfo.GeometryId;
+                string projectId = simProjectInfo.ProjectId;
+
+
+                SimScale.Sdk.Client.Configuration config = simProjectInfo.Configuration;
 
                 var geometryApi = new GeometriesApi(config);
                 var meshOperationApi = new MeshOperationsApi(config);
@@ -146,7 +148,7 @@ namespace SimGH
                     timeDependency: default,
                     nonLinearAnalysis: false,
                     connectionGroups: new List<Contact>() 
-                    { 
+                    {
                         //new Contact(nodeMergingBonded: true, connections: new List<OneOfContactConnections>() { new BondedContact}) 
                     },
                     elementTechnology: new SolidElementTechnology(new ElementTechnology(new AutomaticElementDefinitionMethod())),
@@ -318,10 +320,14 @@ namespace SimGH
                     throw new Exception("Simulation check failed");
                 }
 
+                simProjectInfo.SetSimulationId(simulationId);
+                simProjectInfo.SetSimulationApi(simulationApi);
+
             }
 
-            DA.SetData(0, simulationId);
-            DA.SetData(1, simulationApi);
+            //DA.SetData(0, simulationId);
+            //DA.SetData(1, simulationApi);
+            DA.SetData(0, simProjectInfo);
 
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Created Simulation");
 
