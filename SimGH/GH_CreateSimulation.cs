@@ -33,12 +33,11 @@ namespace SimGH
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
-            //pManager.AddTextParameter("ProjectName", "N", "Project Name", GH_ParamAccess.item);
-            //pManager.AddTextParameter("ProjectID", "P", "ProjectID", GH_ParamAccess.item);
-            //pManager.AddTextParameter("GeometryID", "G", "GeometryID", GH_ParamAccess.item);
-            //pManager.AddGenericParameter("Configuration", "C", "API Client Configuration", GH_ParamAccess.item);
             pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
             pManager.AddTextParameter("MaterialName", "N", "Material Name", GH_ParamAccess.list);
+            pManager.AddNumberParameter("Flux", "F", "Surface heat flux value. Unit: W/m2", GH_ParamAccess.item);
+            pManager.AddNumberParameter("Temperature", "T", "Convective heat flux reference temperature. Unit: Celcius ", GH_ParamAccess.item);
+            pManager.AddNumberParameter("Coefficient", "C", "Convective heat transfer coefficient. Unit: W/(km2) ", GH_ParamAccess.item);
             pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
 
         }
@@ -48,8 +47,6 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            //pManager.AddGenericParameter("SimulationApi", "API", "Simulation API", GH_ParamAccess.item);
-            //pManager.AddGenericParameter("SimulationID", "ID", "Simulation ID", GH_ParamAccess.item);
             pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
         }
 
@@ -62,12 +59,19 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            double inFlux = default;
+            double inTemperature = default;
+            double inCoefficient = default;
+
             List<string> materialName = new List<string>();
             bool create = false;
 
             DA.GetData(0, ref simProjectInfo);
             DA.GetDataList(1, materialName);
-            DA.GetData(2, ref create);
+            DA.GetData(2, ref inFlux);
+            DA.GetData(3, ref inTemperature);
+            DA.GetData(4, ref inCoefficient);
+            DA.GetData(5, ref create);
 
 
             if(create)
@@ -159,17 +163,17 @@ namespace SimGH
                         new SurfaceHeatFluxBC(
                             name: "SurfaceHeatFlux",
                             heatfluxValue: new DimensionalFunctionHeatFlux(
-                                value: new ConstantFunction(value: (decimal) 400), 
+                                value: new ConstantFunction(value: (decimal) inFlux), 
                                 unit: DimensionalFunctionHeatFlux.UnitEnum.WM),
                             topologicalReference: new TopologicalReference(entities: heatEntity)),
 
                         new ConvectiveHeatFluxBC(
                             name: "ConvectiveHeatFlux",
                             referenceTemperature: new DimensionalFunctionTemperature(
-                                value: new ConstantFunction(value :(decimal) 20),
+                                value: new ConstantFunction(value :(decimal) inTemperature),
                                 unit: DimensionalFunctionTemperature.UnitEnum.C),
                             heatTransferCoefficient: new DimensionalFunctionThermalTransmittance(
-                                value: new ConstantFunction(value :(decimal) 10),
+                                value: new ConstantFunction(value :(decimal) inCoefficient),
                                 unit: DimensionalFunctionThermalTransmittance.UnitEnum.WKm),
                             topologicalReference: new TopologicalReference(entities: convectionEntity))
 
@@ -323,8 +327,6 @@ namespace SimGH
 
             }
 
-            //DA.SetData(0, simulationId);
-            //DA.SetData(1, simulationApi);
             DA.SetData(0, simProjectInfo);
 
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Created Simulation");
