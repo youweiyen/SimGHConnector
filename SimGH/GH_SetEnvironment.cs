@@ -84,6 +84,9 @@ namespace SimGH
 
             if (upload)
             {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Setting up environment");
+
+                simProjectInfo = new SimProjectInfo();
                 string projectId = default;
                 Guid geometryId = default;
                 Configuration config = new Configuration();
@@ -167,12 +170,12 @@ namespace SimGH
                 simProjectInfo.SetConfiguration(config);
             }
 
-            //DA.SetData(0, projectId);
-            //DA.SetData(1, geometryId);
-            //DA.SetData(2, config);
             DA.SetData(0, simProjectInfo);
 
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Successfully Set Environment");
+            if (simProjectInfo.GeometryId != default)
+            { 
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Successfully Set Environment");
+            }
 
         }
 
