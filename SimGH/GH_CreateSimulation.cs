@@ -84,11 +84,11 @@ namespace SimGH
 
             if(create)
             {
+                Message = "Creating...";
 
                 SimulationsApi simulationApi = new SimulationsApi();
                 Guid? simulationId = default;
 
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Running");
 
                 Guid geometryId = simProjectInfo.GeometryId;
                 string projectId = simProjectInfo.ProjectId;
@@ -216,109 +216,113 @@ namespace SimGH
 
                 #region CreateMesh
                 // Create mesh operation
-                //var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
-                //    name: "APIMesh",
-                //    geometryId: geometryId,
-                //    model: new SimmetrixMeshingSolid()
-                //));
-                //var meshOperationId = meshOperation.MeshOperationId;
-                //Console.WriteLine("meshOperationId: " + meshOperationId);
 
-                //// Check mesh operation setup
-                //var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
-                //var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-                //Console.WriteLine("Mesh operation setup check warnings:");
-                //warnings.ForEach(i => Console.WriteLine("{0}", i));
-                //var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
-                //if (errors.Any())
-                //{
-                //    Console.WriteLine("Mesh operation setup check errors:");
-                //    errors.ForEach(i => Console.WriteLine("{0}", i));
-                //    throw new Exception("Simulation check failed");
-                //}
+                var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
+                    name: "APIMesh",
+                    geometryId: geometryId,
+                    model: new SimmetrixMeshingSolid()
+                ));
+                var meshOperationId = meshOperation.MeshOperationId;
+                Console.WriteLine("meshOperationId: " + meshOperationId);
 
-                //// Estimate mesh operation
-                //var maxRuntime = 0.0;
-                //try
-                //{
-                //    var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
-                //    Console.WriteLine("Mesh operation estimation: " + estimationResult);
+                // Check mesh operation setup
+                var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
+                var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+                Console.WriteLine("Mesh operation setup check warnings:");
+                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+                if (errors.Any())
+                {
+                    Console.WriteLine("Mesh operation setup check errors:");
+                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    throw new Exception("Simulation check failed");
+                }
 
-                //    if (estimationResult.Duration != null)
-                //    {
-                //        maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
-                //        maxRuntime = Math.Max(3600, maxRuntime * 2);
-                //    }
-                //    else
-                //    {
-                //        maxRuntime = 36000;
-                //        Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
-                //    }
-                //}
-                //catch (ApiException ae)
-                //{
-                //    if (ae.ErrorCode == 422)
-                //    {
-                //        maxRuntime = 36000;
-                //        Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
-                //    }
-                //    else
-                //    {
-                //        throw ae;
-                //    }
-                //}
+                // Estimate mesh operation
+                var maxRuntime = 0.0;
+                try
+                {
+                    var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
+                    Console.WriteLine("Mesh operation estimation: " + estimationResult);
 
-                //// Start mesh operation and wait until it's finished
-                //meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
-                //meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
+                    if (estimationResult.Duration != null)
+                    {
+                        maxRuntime = System.Xml.XmlConvert.ToTimeSpan(estimationResult.Duration.IntervalMax).TotalSeconds;
+                        maxRuntime = Math.Max(3600, maxRuntime * 2);
+                    }
+                    else
+                    {
+                        maxRuntime = 36000;
+                        Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
+                    }
+                }
+                catch (ApiException ae)
+                {
+                    if (ae.ErrorCode == 422)
+                    {
+                        maxRuntime = 36000;
+                        Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
+                    }
+                    else
+                    {
+                        throw ae;
+                    }
+                }
 
-                //Stopwatch stopWatch = Stopwatch.StartNew();
-                //HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
+                // Start mesh operation and wait until it's finished
+                meshOperationApi.StartMeshOperation(projectId, meshOperationId, simulationId);
+                meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId);
+
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                HashSet<Status> terminalStatuses = new HashSet<Status> { Status.FINISHED, Status.CANCELED, Status.FAILED };
 
 
-                //stopWatch.Restart();
-                //int failedTries = 0;
-                //while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
-                //{
-                //    if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
-                //    {
-                //        throw new TimeoutException();
-                //    }
-                //    Thread.Sleep(30000);
-                //    meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
-                //        (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-                //    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
-                //}
+                stopWatch.Restart();
+                int failedTries = 0;
+                while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
+                {
+                    if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
+                    {
+                        throw new TimeoutException();
+                    }
+                    Thread.Sleep(30000);
+                    meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
+                        (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
+                    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+                }
 
-                //Console.WriteLine("final mesh operation: " + meshOperation);
+                Console.WriteLine("final mesh operation: " + meshOperation);
 
-                //// Read simulation and update with the finished mesh
-                //simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
-                //simulationSpec.MeshId = meshOperation.MeshId;
-                //simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+                // Read simulation and update with the finished mesh
+                simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
+                simulationSpec.MeshId = meshOperation.MeshId;
+                simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
 
-                //// Check simulation
-                //var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
-                //warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-                //Console.WriteLine("Simulation check warnings:");
-                //warnings.ForEach(i => Console.WriteLine("{0}", i));
-                //errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
-                //if (errors.Any())
-                //{
-                //    Console.WriteLine("Simulation check errors:");
-                //    errors.ForEach(i => Console.WriteLine("{0}", i));
-                //    throw new Exception("Simulation check failed");
-                //}
+                // Check simulation
+                var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
+                warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
+                Console.WriteLine("Simulation check warnings:");
+                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
+                if (errors.Any())
+                {
+                    Console.WriteLine("Simulation check errors:");
+                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    throw new Exception("Simulation check failed");
+                }
                 #endregion
 
                 simProjectInfo.SetSimulationId(simulationId);
                 simProjectInfo.SetSimulationApi(simulationApi);
+                simProjectInfo.SetSimulationSpec(simulationSpec);
 
             }
 
             DA.SetData(0, simProjectInfo);
-
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Created Simulation");
+            if (simProjectInfo.SimulationId != default)
+            { 
+                Message = "Created Simulation";
+            }
 
         }
 

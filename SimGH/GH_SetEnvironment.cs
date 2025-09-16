@@ -84,7 +84,7 @@ namespace SimGH
 
             if (upload)
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Setting up environment");
+                Message = "Setting...";
 
                 simProjectInfo = new SimProjectInfo();
                 string projectId = default;
@@ -93,8 +93,6 @@ namespace SimGH
 
                 // API client configuration
                 var API_KEY_HEADER = "X-API-KEY";
-                //var API_KEY = Environment.GetEnvironmentVariable("SIMSCALE_API_KEY");
-                //var API_URL = Environment.GetEnvironmentVariable("SIMSCALE_API_URL");
                 var API_URL = "https://api.simscale.com";
                 var API_KEY = apiKey;
                 config.BasePath = API_URL + "/v0";
@@ -174,11 +172,35 @@ namespace SimGH
 
             if (simProjectInfo.GeometryId != default)
             { 
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Successfully Set Environment");
+                Message = "Geometry Uploaded";
             }
 
         }
 
+        public class SolveResults
+        {
+            public int Value { get; set; }
+        }
+        private static SolveResults ComputeFibonacci(int n)
+        {
+            SolveResults result = new SolveResults();
+            if (n == 0)
+                result.Value = 0;
+            else if (n == 1)
+                result.Value = 1;
+            else
+            {
+                int x = 0, y = 1, rc = 0;
+                for (int i = 2; i <= n; i++)
+                {
+                    rc = x + y;
+                    x = y;
+                    y = rc;
+                }
+                result.Value = rc;
+            }
+            return result;
+        }
 
 
         /// <summary>

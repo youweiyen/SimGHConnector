@@ -1,7 +1,7 @@
 ﻿using RestSharp;
 using SimScale.Sdk.Api;
 using SimScale.Sdk.Client;
-
+using SimScale.Sdk.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +26,7 @@ namespace SimGH
         public string ProjectId { get; private set; }
         public Guid GeometryId { get; private set; }
         public string ApiKey { get; private set; }
+        public SimulationSpec SimulationSpec { get; private set; }
 
 
 
@@ -42,6 +43,7 @@ namespace SimGH
         public void SetProjectId(string projectId) => ProjectId = projectId;
         public void SetGeometryId(Guid geometryId) => GeometryId = geometryId;
         public void SetApiKey(string apiKey) => ApiKey = apiKey;
+        public void SetSimulationSpec(SimulationSpec simulationSpec) => SimulationSpec = simulationSpec;
 
     }
 }
