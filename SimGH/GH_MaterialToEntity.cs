@@ -20,7 +20,7 @@ namespace SimGH
         public GH_MaterialToEntity()
           : base("MaterialToEntity", "E",
               "Get the material geometry name from the uploaded geometry",
-              "´SimGH", "1_SimScale")
+              "SimGH", "1_SimScale")
         {
         }
 
@@ -83,7 +83,7 @@ namespace SimGH
         }
         public IGH_Param CreateParameter(GH_ParameterSide side, int index)
         {
-            if(side != GH_ParameterSide.Input) return null;
+            if(side != GH_ParameterSide.Output) return null;
 
             return new Param_String();
         }
@@ -95,9 +95,9 @@ namespace SimGH
                 param.Access = GH_ParamAccess.item;
 
                 param.MutableNickName = false;
-                param.NickName = $"C{i + 1}";
-                param.Name = $"Character {i + 1}.";
-                param.Description = $"Character at location {i + 1}.";
+                param.NickName = $"M{i + 1}";
+                param.Name = $"Material {i + 1}";
+                param.Description = $"Material Entity {i + 1}";
             }
         }
 
