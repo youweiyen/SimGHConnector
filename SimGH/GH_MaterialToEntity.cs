@@ -92,7 +92,7 @@ namespace SimGH
             for (int i = 0; i < Params.Output.Count; i++)
             {
                 var param = Params.Output[i];
-                param.Access = GH_ParamAccess.item;
+                param.Access = GH_ParamAccess.list;
 
                 param.MutableNickName = false;
                 param.NickName = $"M{i + 1}";

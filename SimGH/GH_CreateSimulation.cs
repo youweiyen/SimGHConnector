@@ -13,10 +13,11 @@ using Point = SimScale.Sdk.Model.Point;
 using System.Diagnostics;
 using System.Threading;
 using System.Drawing;
+using Grasshopper.Kernel.Parameters;
 
 namespace SimGH
 {
-    public class GH_CreateSimulation : GH_Component
+    public class GH_CreateSimulation : GH_Component, IGH_VariableParameterComponent
     {
         /// <summary>
         /// Initializes a new instance of the GH_CreateSimulation class.
@@ -34,12 +35,12 @@ namespace SimGH
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddGenericParameter("ProjectInfo", "I", "SimScale Project Info", GH_ParamAccess.item);
+            pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
             pManager.AddTextParameter("MaterialName", "N", "Material Name", GH_ParamAccess.list);
             pManager.AddNumberParameter("Flux", "F", "Surface heat flux value. Unit: W/m2", GH_ParamAccess.item);
             pManager.AddNumberParameter("Temperature", "T", "Convective heat flux reference temperature. Unit: Celcius ", GH_ParamAccess.item);
             pManager.AddNumberParameter("Coefficient", "C", "Convective heat transfer coefficient. Unit: W/(km2) ", GH_ParamAccess.item);
-            pManager.AddBooleanParameter("Create", "T", "Set true to create simulation", GH_ParamAccess.item);
-
+            pManager.AddTextParameter("Material1", "M1", "Material", GH_ParamAccess.list);
         }
 
         /// <summary>
@@ -67,12 +68,19 @@ namespace SimGH
             bool create = false;
 
             DA.GetData(0, ref simProjectInfo);
-            DA.GetDataList(1, materialName);
-            DA.GetData(2, ref inFlux);
-            DA.GetData(3, ref inTemperature);
-            DA.GetData(4, ref inCoefficient);
-            DA.GetData(5, ref create);
+            DA.GetData(1, ref create);
+            DA.GetDataList(2, materialName);
+            DA.GetData(3, ref inFlux);
+            DA.GetData(4, ref inTemperature);
+            DA.GetData(5, ref inCoefficient);
 
+            var materialEntities = new List<List<string>>();
+            for (int i = 6; i < Params.Input.Count; i++)
+            {
+                List<string> items = new List<string>();
+                DA.GetDataList(i, items);
+                materialEntities.Add(items);
+            }
 
             if(create)
             {
@@ -113,24 +121,6 @@ namespace SimGH
                 //    _class: "region"
                 //).Embedded;
 
-                var geometry0 = GetEntityByName(
-                    geometryApi,
-                    projectId,
-                    geometryId,
-                    values: new List<string> { materialName[0] }
-                );
-                var geometry1 = GetEntityByName(
-                    geometryApi,
-                    projectId,
-                    geometryId,
-                    values: new List<string> { materialName[1] }
-                );
-                var geometry2 = GetEntityByName(
-                    geometryApi,
-                    projectId,
-                    geometryId,
-                    values: new List<string> { materialName[2] }
-                );
                 var heatEntity = GetEntityByColor(
                     geometryApi,
                     projectId,
@@ -204,29 +194,27 @@ namespace SimGH
                 }
 
                 var customMaterials = materialsApi.GetMaterials(customMaterialGroup.MaterialGroupId).Embedded;
-            
-
-                var material0UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi, 
-                                                            customMaterialGroup, customMaterials, materialName[0]);
-                var material1UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
-                                                customMaterialGroup, customMaterials, materialName[1]);
-                var material2UpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
-                                                customMaterialGroup, customMaterials, materialName[2]);
-
+                
                 // Add assignments to the new material
+                
+                for (int i = 0; i < materialName.Count; i++)
+                {
+                    var materialUpdateResponse = UpdateMaterial(projectId, simulationId, simulationApi, materialsApi,
+                                            customMaterialGroup, customMaterials, materialName[i]);
+                }
+
                 simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
                 var materials = ((HeatTransfer)simulationSpec.Model).Materials;
-
-                var material0 = materials.Where(m => m.Name == materialName[0]).First();
-                var material1 = materials.Where(m => m.Name == materialName[1]).First();
-                var material2 = materials.Where(m => m.Name == materialName[2]).First();
-
-                material0.TopologicalReference = new TopologicalReference(entities: geometry0);
-                material1.TopologicalReference = new TopologicalReference(entities: geometry1);
-                material2.TopologicalReference = new TopologicalReference(entities: geometry2);
+                
+                for (int i = 0; i < materialName.Count; i++)
+                {
+                    materials.Where(m => m.Name == materialName[i])
+                             .First().TopologicalReference = new TopologicalReference(entities: materialEntities[i]);
+                }
 
                 simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
 
+                #region CreateMesh
                 // Create mesh operation
                 var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
                     name: "APIMesh",
@@ -321,6 +309,7 @@ namespace SimGH
                     errors.ForEach(i => Console.WriteLine("{0}", i));
                     throw new Exception("Simulation check failed");
                 }
+                #endregion
 
                 simProjectInfo.SetSimulationId(simulationId);
                 simProjectInfo.SetSimulationApi(simulationApi);
@@ -333,27 +322,6 @@ namespace SimGH
 
         }
 
-
-        public static List<string> GetEntityByName(GeometriesApi geometryApi, string projectId, Guid geometryId,
-                                       List<string> values = null)
-        {
-            var entities = geometryApi.GetGeometryMappings(
-                projectId: projectId,
-                geometryId: geometryId,
-                attributes: new List<string> { "ATTRIB_XPARASOLID_NAME" },
-                values: values
-            ).Embedded;
-
-            if (entities.Count != 0)
-            {
-                List<string> names = entities.Select(e => e.Name).ToList();
-                return names;
-            }
-            else
-            {
-                throw new Exception("No entities returned");
-            }
-        }
         public static List<string> GetEntityByColor(GeometriesApi geometryApi, string projectId, Guid geometryId,
                                List<string> values = null)
         {
@@ -401,6 +369,42 @@ namespace SimGH
             var materialUpdateResponse = simulationApi.UpdateSimulationMaterials(projectId, simulationId, materialUpdateRequest);
 
             return materialUpdateResponse;
+        }
+
+        public bool CanInsertParameter(GH_ParameterSide side, int index)
+        {
+            return side == GH_ParameterSide.Input;
+        }
+
+        public bool CanRemoveParameter(GH_ParameterSide side, int index)
+        {
+            return side == GH_ParameterSide.Input && Params.Input.Count > 7;
+        }
+
+        public IGH_Param CreateParameter(GH_ParameterSide side, int index)
+        {
+            if (side != GH_ParameterSide.Input) return null;
+
+            return new Param_String();
+        }
+
+        public bool DestroyParameter(GH_ParameterSide side, int index)
+        {
+            return true;
+        }
+
+        public void VariableParameterMaintenance()
+        {
+            for (int i = 6; i < Params.Input.Count; i++)
+            {
+                var param = Params.Input[i];
+                param.Access = GH_ParamAccess.list;
+
+                param.MutableNickName = false;
+                param.NickName = $"M{i - 6 + 1}";
+                param.Name = $"Material {i - 6 + 1}";
+                param.Description = $"Material Entity {i - 6 + 1}";
+            }
         }
 
         /// <summary>
