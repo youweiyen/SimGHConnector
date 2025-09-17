@@ -10,18 +10,22 @@ using System.Threading;
 using System.Diagnostics;
 using Grasshopper.Rhinoceros.Params;
 using SimScale.Sdk.Api;
+using Rhino.Commands;
+using System.Threading.Tasks;
+using Grasshopper.Kernel.Types.Transforms;
+using Rhino;
 
 namespace SimGH
 {
-    public class GH_CreateMesh : GH_Component
+    public class GH_GenerateMeshAsync : GH_Component
     {
         /// <summary>
         /// Initializes a new instance of the GH_CreateMesh class.
         /// </summary>
-        public GH_CreateMesh()
-          : base("GenerateMesh", "Nickname",
-              "Description",
-              "Category", "Subcategory")
+        public GH_GenerateMeshAsync()
+          : base("GenerateMesh", "M",
+              "GenerateMesh",
+              "SimGH", "1_SimScale")
         {
         }
 
@@ -30,6 +34,8 @@ namespace SimGH
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
+            pManager.AddGenericParameter("Projectinfo", "I", "SimScale Project Info", GH_ParamAccess.item);
+
         }
 
         /// <summary>
@@ -37,8 +43,12 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
+            pManager.AddTextParameter("Warnings", "W", "Log Warnings", GH_ParamAccess.list);
         }
+
         SimProjectInfo simProjectInfo = new SimProjectInfo();
+        private bool _shouldExpire = false;
+        private string _message = "";
 
         /// <summary>
         /// This is the method that actually does the work.
@@ -46,10 +56,16 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            if (_shouldExpire)
+            {
+                //second call
+                DA.SetData(0, _message);
+                _shouldExpire = false;
+            }
 
-            bool generate = false;
-            DA.GetData(0, ref simProjectInfo);
-            DA.GetData(1, ref generate);
+            //bool generate = false;
+            //DA.GetData(1, ref generate);
+            if(!DA.GetData(0, ref simProjectInfo)) return;
 
             var projectId = simProjectInfo.ProjectId;
             Configuration config = simProjectInfo.Configuration;
@@ -57,12 +73,18 @@ namespace SimGH
             var simulationId = simProjectInfo.SimulationId;
             var simulationApi = simProjectInfo.SimulationApi;
             var simulationSpec = simProjectInfo.SimulationSpec;
-
             var meshOperationApi = new MeshOperationsApi(config);
 
+            CreateMeshAsync( meshOperationApi, projectId, geometryId, simulationId, simulationSpec, simulationApi);
 
-            if (generate)
+
+        }
+
+        private void CreateMeshAsync(MeshOperationsApi meshOperationApi, string projectId, Guid? geometryId, Guid? simulationId, SimulationSpec simulationSpec, SimulationsApi simulationApi)
+        {
+            Task.Run(() =>
             {
+
                 var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
                     name: "APIMesh",
                     geometryId: geometryId,
@@ -77,7 +99,7 @@ namespace SimGH
 
                 Console.WriteLine("Mesh operation setup check warnings:");
                 warnings.ForEach(i => Console.WriteLine("{0}", i));
-                
+
                 var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
                 if (errors.Any())
                 {
@@ -136,7 +158,7 @@ namespace SimGH
                     Thread.Sleep(30000);
                     meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
                         (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-                    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+                    _message = "Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress;
                 }
 
                 Console.WriteLine("final mesh operation: " + meshOperation);
@@ -158,6 +180,20 @@ namespace SimGH
                     errors.ForEach(i => Console.WriteLine("{0}", i));
                     throw new Exception("Simulation check failed");
                 }
+
+                _shouldExpire = true;
+                RhinoApp.InvokeOnUiThread((Action)delegate { ExpireSolution(true); });
+
+            });
+
+            
+        }
+        protected override void ExpireDownStreamObjects()
+        {
+            if (_shouldExpire)
+            {
+                base.ExpireDownStreamObjects();
+                
             }
         }
 
@@ -179,7 +215,7 @@ namespace SimGH
         /// </summary>
         public override Guid ComponentGuid
         {
-            get { return new Guid("2B03EC98-8C45-4FF6-885A-55C39A5DAAF6"); }
+            get { return new Guid("1810e641-c1ed-42c9-975c-039be4e176d7"); }
         }
     }
 }
