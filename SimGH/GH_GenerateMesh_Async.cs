@@ -46,12 +46,12 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-
+            pManager.AddTextParameter("Log", "L", "Result Messages", GH_ParamAccess.list);
         }
 
         SimProjectInfo simProjectInfo = new SimProjectInfo();
         private bool _shouldExpire = false;
-        private string _message = "";
+        private List<string> _message = new List<string>();
 
         /// <summary>
         /// This is the method that actually does the work.
@@ -59,12 +59,12 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            //if (_shouldExpire)
-            //{
-            //    //second call
-            //    DA.SetData(0, _message);
-            //    _shouldExpire = false;
-            //}
+            if (_shouldExpire)
+            {
+                //second call
+                DA.SetDataList(0, _message);
+                _shouldExpire = false;
+            }
 
             int inFineness = 5;
             bool generate = false;
@@ -84,8 +84,8 @@ namespace SimGH
 
                 CreateMeshAsync( meshOperationApi, projectId, geometryId, simulationId, simulationSpec, simulationApi, inFineness);
             }
+            //DA.SetDataList(0, _message);
 
-            //DA.SetData(0, _message);
 
         }
 
@@ -100,22 +100,22 @@ namespace SimGH
                     model: new SimmetrixMeshingSolid(sizing: new AutomaticMeshSizingSimmetrix(fineness: (decimal)fineness))
                 ));
                 var meshOperationId = meshOperation.MeshOperationId;
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "meshOperationId: " + meshOperationId);
+                //AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "meshOperationId: " + meshOperationId);
 
                 // Check mesh operation setup
                 var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
                 var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
 
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Mesh operation setup check warnings:");
-                warnings.ForEach(i => AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "{0}" + i));
+                //AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Mesh operation setup check warnings:");
+                //warnings.ForEach(i => AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"{i}"));
                 
                 Message = "Checking Warnings...";
 
                 var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
                 if (errors.Any())
                 {
-                    Console.WriteLine("Mesh operation setup check errors:");
-                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Mesh operation setup check errors:");
+                    errors.ForEach(i => AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"{i}"));
                     throw new Exception("Simulation check failed");
                 }
 
@@ -124,7 +124,7 @@ namespace SimGH
                 try
                 {
                     var estimationResult = meshOperationApi.EstimateMeshOperation(projectId, meshOperationId);
-                    Console.WriteLine("Mesh operation estimation: " + estimationResult);
+                    //AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Mesh operation estimation: " + estimationResult);
 
                     if (estimationResult.Duration != null)
                     {
@@ -134,7 +134,7 @@ namespace SimGH
                     else
                     {
                         maxRuntime = 36000;
-                        Console.WriteLine("Mesh operation estimated duration not available, assuming max runtime of {0} seconds", maxRuntime);
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Mesh operation estimated duration not available, assuming max runtime of {maxRuntime} seconds");
                     }
                 }
                 catch (ApiException ae)
@@ -142,7 +142,7 @@ namespace SimGH
                     if (ae.ErrorCode == 422)
                     {
                         maxRuntime = 36000;
-                        Console.WriteLine("Mesh operation estimation not available, assuming max runtime of {0} seconds", maxRuntime);
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Mesh operation estimation not available, assuming max runtime of {maxRuntime} seconds");
                     }
                     else
                     {
@@ -160,6 +160,8 @@ namespace SimGH
 
                 stopWatch.Restart();
                 int failedTries = 0;
+
+                Message = "Meshing...";
                 while (!terminalStatuses.Contains(meshOperation.Status ?? Status.READY))
                 {
                     if (stopWatch.Elapsed.TotalSeconds > maxRuntime)
@@ -169,47 +171,51 @@ namespace SimGH
                     Thread.Sleep(30000);
                     meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
                         (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-                    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+                    //AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
+                    string progress = String.Format("{0: 0}", (meshOperation?.Progress)*100);
+                    Message = $"{progress}%";
+
                 }
 
-                Console.WriteLine("final mesh operation: " + meshOperation);
-                Message = "Meshed";
+                _message.Add("final mesh operation: " + meshOperation);
 
                 // Read simulation and update with the finished mesh
                 simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
                 simulationSpec.MeshId = meshOperation.MeshId;
                 simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
-                Message = "Updated";
-
+                
+                Message = "Checking...";
                 // Check simulation
                 var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
                 warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-                _message = "Simulation check warnings:";
-                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                _message.Add("Simulation check warnings:");
+                var checkMessages = warnings.Select(i => ($"{i}")).ToList();
+                _message.AddRange(checkMessages);
                 errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
                 if (errors.Any())
                 {
-                    Console.WriteLine("Simulation check errors:");
-                    errors.ForEach(i => Console.WriteLine("{0}", i));
+                    _message.Add("Simulation check errors:");
+                    var errorMessages = errors.Select(i => ($"{i}")).ToList();
+                    _message.AddRange(errorMessages);
                     throw new Exception("Simulation check failed");
                 }
                 Message = "Completed";
 
-                //_shouldExpire = true;
-                //RhinoApp.InvokeOnUiThread((Action)delegate { ExpireSolution(true); });
+                _shouldExpire = true;
+                RhinoApp.InvokeOnUiThread((Action)delegate { ExpireSolution(true); });
 
             });
 
             
         }
-        //protected override void ExpireDownStreamObjects()
-        //{
-        //    if (_shouldExpire)
-        //    {
-        //        base.ExpireDownStreamObjects();
-                
-        //    }
-        //}
+        protected override void ExpireDownStreamObjects()
+        {
+            if (_shouldExpire)
+            {
+                base.ExpireDownStreamObjects();
+
+            }
+        }
 
         /// <summary>
         /// Provides an Icon for the component.

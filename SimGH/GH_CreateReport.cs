@@ -14,9 +14,9 @@ namespace SimGH
         /// Initializes a new instance of the GH_CreateReport class.
         /// </summary>
         public GH_CreateReport()
-          : base("CreateReport", "Report",
+          : base("CreateReport", "R",
               "Description",
-              "Category", "Subcategory")
+              "SimGH", "1_SimScale")
         {
         }
 
