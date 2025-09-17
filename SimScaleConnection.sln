@@ -5,7 +5,7 @@ VisualStudioVersion = 17.10.34928.147
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleRunner", "ConsoleRunner\ConsoleRunner.csproj", "{C8CF5DEB-8E39-41B9-9D1E-D7F99BE687B8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimGH", "SimGH\SimGH.csproj", "{E0A51D49-B1BB-49BF-AB5F-1E50B94B1969}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimGH", "SimGH\SimGH.csproj", "{E0A51D49-B1BB-49BF-AB5F-1E50B94B1969}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
