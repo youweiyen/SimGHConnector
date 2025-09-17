@@ -35,6 +35,9 @@ namespace SimGH
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddGenericParameter("Projectinfo", "I", "SimScale Project Info", GH_ParamAccess.item);
+            pManager.AddIntegerParameter("Fineness", "F", "Mesh Fineness, default set to 5", GH_ParamAccess.item);
+            pManager.AddBooleanParameter("Generate", "T", "Generate Mesh in SimScale", GH_ParamAccess.item);
+            pManager[1].Optional = true;
 
         }
 
@@ -43,7 +46,7 @@ namespace SimGH
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddTextParameter("Warnings", "W", "Log Warnings", GH_ParamAccess.list);
+
         }
 
         SimProjectInfo simProjectInfo = new SimProjectInfo();
@@ -56,31 +59,37 @@ namespace SimGH
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            if (_shouldExpire)
-            {
-                //second call
-                DA.SetData(0, _message);
-                _shouldExpire = false;
+            //if (_shouldExpire)
+            //{
+            //    //second call
+            //    DA.SetData(0, _message);
+            //    _shouldExpire = false;
+            //}
+
+            int inFineness = 5;
+            bool generate = false;
+            if (!DA.GetData(0, ref simProjectInfo)) return;
+            DA.GetData(1, ref inFineness);
+            DA.GetData(2, ref generate);
+
+            if (generate)
+            { 
+                var projectId = simProjectInfo.ProjectId;
+                Configuration config = simProjectInfo.Configuration;
+                var geometryId = simProjectInfo.GeometryId;
+                var simulationId = simProjectInfo.SimulationId;
+                var simulationApi = simProjectInfo.SimulationApi;
+                var simulationSpec = simProjectInfo.SimulationSpec;
+                var meshOperationApi = new MeshOperationsApi(config);
+
+                CreateMeshAsync( meshOperationApi, projectId, geometryId, simulationId, simulationSpec, simulationApi, inFineness);
             }
 
-            //bool generate = false;
-            //DA.GetData(1, ref generate);
-            if(!DA.GetData(0, ref simProjectInfo)) return;
-
-            var projectId = simProjectInfo.ProjectId;
-            Configuration config = simProjectInfo.Configuration;
-            var geometryId = simProjectInfo.GeometryId;
-            var simulationId = simProjectInfo.SimulationId;
-            var simulationApi = simProjectInfo.SimulationApi;
-            var simulationSpec = simProjectInfo.SimulationSpec;
-            var meshOperationApi = new MeshOperationsApi(config);
-
-            CreateMeshAsync( meshOperationApi, projectId, geometryId, simulationId, simulationSpec, simulationApi);
-
+            //DA.SetData(0, _message);
 
         }
 
-        private void CreateMeshAsync(MeshOperationsApi meshOperationApi, string projectId, Guid? geometryId, Guid? simulationId, SimulationSpec simulationSpec, SimulationsApi simulationApi)
+        private void CreateMeshAsync(MeshOperationsApi meshOperationApi, string projectId, Guid? geometryId, Guid? simulationId, SimulationSpec simulationSpec, SimulationsApi simulationApi, int fineness)
         {
             Task.Run(() =>
             {
@@ -88,17 +97,19 @@ namespace SimGH
                 var meshOperation = meshOperationApi.CreateMeshOperation(projectId, new MeshOperation(
                     name: "APIMesh",
                     geometryId: geometryId,
-                    model: new SimmetrixMeshingSolid()
+                    model: new SimmetrixMeshingSolid(sizing: new AutomaticMeshSizingSimmetrix(fineness: (decimal)fineness))
                 ));
                 var meshOperationId = meshOperation.MeshOperationId;
-                Console.WriteLine("meshOperationId: " + meshOperationId);
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "meshOperationId: " + meshOperationId);
 
                 // Check mesh operation setup
                 var meshCheck = meshOperationApi.CheckMeshOperationSetup(projectId, meshOperationId, simulationId);
                 var warnings = meshCheck.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
 
-                Console.WriteLine("Mesh operation setup check warnings:");
-                warnings.ForEach(i => Console.WriteLine("{0}", i));
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Mesh operation setup check warnings:");
+                warnings.ForEach(i => AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "{0}" + i));
+                
+                Message = "Checking Warnings...";
 
                 var errors = meshCheck.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
                 if (errors.Any())
@@ -158,20 +169,22 @@ namespace SimGH
                     Thread.Sleep(30000);
                     meshOperation = meshOperationApi.GetMeshOperation(projectId, meshOperationId) ??
                         (++failedTries > 5 ? throw new Exception("HTTP request failed too many times.") : meshOperation);
-                    _message = "Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress;
+                    Console.WriteLine("Mesh operation status: " + meshOperation?.Status + " - " + meshOperation?.Progress);
                 }
 
                 Console.WriteLine("final mesh operation: " + meshOperation);
+                Message = "Meshed";
 
                 // Read simulation and update with the finished mesh
                 simulationSpec = simulationApi.GetSimulation(projectId, simulationId);
                 simulationSpec.MeshId = meshOperation.MeshId;
                 simulationApi.UpdateSimulation(projectId, simulationId, simulationSpec);
+                Message = "Updated";
 
                 // Check simulation
                 var checkResult = simulationApi.CheckSimulationSetup(projectId, simulationId);
                 warnings = checkResult.Entries.Where(e => e.Severity == LogSeverity.WARNING).ToList();
-                Console.WriteLine("Simulation check warnings:");
+                _message = "Simulation check warnings:";
                 warnings.ForEach(i => Console.WriteLine("{0}", i));
                 errors = checkResult.Entries.Where(e => e.Severity == LogSeverity.ERROR).ToList();
                 if (errors.Any())
@@ -180,22 +193,23 @@ namespace SimGH
                     errors.ForEach(i => Console.WriteLine("{0}", i));
                     throw new Exception("Simulation check failed");
                 }
+                Message = "Completed";
 
-                _shouldExpire = true;
-                RhinoApp.InvokeOnUiThread((Action)delegate { ExpireSolution(true); });
+                //_shouldExpire = true;
+                //RhinoApp.InvokeOnUiThread((Action)delegate { ExpireSolution(true); });
 
             });
 
             
         }
-        protected override void ExpireDownStreamObjects()
-        {
-            if (_shouldExpire)
-            {
-                base.ExpireDownStreamObjects();
+        //protected override void ExpireDownStreamObjects()
+        //{
+        //    if (_shouldExpire)
+        //    {
+        //        base.ExpireDownStreamObjects();
                 
-            }
-        }
+        //    }
+        //}
 
         /// <summary>
         /// Provides an Icon for the component.

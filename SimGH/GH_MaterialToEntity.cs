@@ -50,7 +50,7 @@ namespace SimGH
             SimProjectInfo simProjectInfo = new SimProjectInfo();
             List<string> inNames = new List<string>();
 
-            DA.GetData(0, ref simProjectInfo);
+            if(!DA.GetData(0, ref simProjectInfo)) return;
             DA.GetDataList(1, inNames);
 
 
