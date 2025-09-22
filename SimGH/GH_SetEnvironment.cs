@@ -141,7 +141,7 @@ namespace SimGH
                     location: new GeometryImportRequestLocation(storageId),
                     format: GeometryImportRequest.FormatEnum.STEP,
                     inputUnit: GeometryUnit.M,
-                    options: new GeometryImportRequestOptions(facetSplit: false, sewing: false, improve: true, optimizeForLBMSolver: false)
+                    options: new GeometryImportRequestOptions(facetSplit: true, sewing: true, improve: false, optimizeForLBMSolver: false)
                 );
                 var geometryImport = geometryImportApi.ImportGeometry(projectId, geometryImportRequest);
                 var geometryImportId = geometryImport.GeometryImportId.Value;
